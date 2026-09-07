@@ -1,0 +1,32 @@
+name: stage
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - fastani
+  - ezaai
+  - prodigal
+  - diamond
+  - checkm-genome
+  - hmmer
+  - mafft
+  - muscle
+  - fasttree
+  - iqtree
+  - python>=3.10
+  - pandas
+  - numpy
+  - matplotlib
+  - seaborn
+  - openpyxl
+  - biopython
+  - streamlit
+  - r-base>=4.2
+  - r-ggplot2
+  - r-pheatmap
+  - r-ape
+  - bioconductor-ggtree
+  - bioconductor-treeio
+  - git
+  - unzip
+  - wget

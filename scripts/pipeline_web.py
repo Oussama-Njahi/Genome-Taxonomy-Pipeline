@@ -1,0 +1,229 @@
+#!/usr/bin/env python3
+# pipeline_web.py - Parameterized version of pipeline.py for the web interface.
+#
+# Same 7 steps, same tools, same logic as pipeline.py. The only difference is
+# that genome folder, protein folder and results folder are passed as
+# command-line arguments instead of being hardcoded, so several independent
+# jobs (one per web upload) can run without touching each other's files.
+#
+# Usage:
+#   python pipeline_web.py --genomes-dir <dir> --output-dir <dir> [--job-id <id>] [--threads 4]
+#
+# Progress is reported on stdout as lines "PROGRESS <n>/7 <label>" so a caller
+# (e.g. the FastAPI backend) can parse them to drive a progress bar.
+
+import argparse
+import glob
+import os
+import shutil
+import subprocess
+import sys
+import uuid
+
+STEPS = [
+    "Quality control",
+    "Protein prediction (Prodigal)",
+    "ANI (FastANI)",
+    "AAI (EzAAI)",
+    "POCP (DIAMOND)",
+    "Phylogenomic tree (EasyCGTree)",
+    "Figures (R)",
+]
+
+SCRIPTS = os.path.dirname(os.path.abspath(__file__))
+BASE = os.path.dirname(SCRIPTS)
+EASYCG = BASE + "/EasyCGTree4/EasyCGTree.v4.2-Linux"
+
+
+def announce(step_index, extra=""):
+    label = STEPS[step_index - 1]
+    print("PROGRESS %d/%d %s%s" % (step_index, len(STEPS), label, (" - " + extra) if extra else ""))
+    sys.stdout.flush()
+
+
+def fail(message):
+    print("STEP FAILED: %s" % message)
+    sys.stdout.flush()
+    sys.exit(1)
+
+
+def run(cmd, **kwargs):
+    """Run a subprocess and stop the pipeline with a clear message if it fails."""
+    print("    $ " + " ".join(str(c) for c in cmd))
+    sys.stdout.flush()
+    result = subprocess.run(cmd, **kwargs)
+    if result.returncode != 0:
+        fail("command failed (exit code %d): %s" % (result.returncode, " ".join(str(c) for c in cmd)))
+
+
+def lire_checkm2(genomes_dir, results_dir, fichiers):
+    print("    (running CheckM2, this may take a few minutes...)")
+
+    groupes = {}
+    for chemin in fichiers:
+        ext = os.path.splitext(chemin)[1].lstrip(".")
+        groupes.setdefault(ext, []).append(chemin)
+
+    qualite = {}
+    for ext, genomes_du_groupe in groupes.items():
+        sous_dossier = results_dir + "/checkm2_input_" + ext
+        os.makedirs(sous_dossier, exist_ok=True)
+        for chemin in genomes_du_groupe:
+            shutil.copy(chemin, sous_dossier)
+
+        sortie = results_dir + "/checkm2_out_" + ext
+        run(["conda", "run", "-n", "checkm2env",
+             "checkm2", "predict",
+             "--input", sous_dossier,
+             "--output-directory", sortie,
+             "-x", ext, "--threads", "4", "--force"])
+
+        rapport = sortie + "/quality_report.tsv"
+        with open(rapport) as f:
+            next(f)
+            for ligne in f:
+                cols = ligne.strip().split("\t")
+                nom, completude, contamination = cols[0], cols[1], cols[2]
+                qualite[nom] = (completude, contamination)
+
+    return qualite
+
+
+def etape_qc(genomes_dir, results_dir):
+    announce(1)
+    fichiers = sorted(glob.glob(genomes_dir + "/*.fas") +
+                       glob.glob(genomes_dir + "/*.fasta") +
+                       glob.glob(genomes_dir + "/*.fna"))
+    if not fichiers:
+        fail("no .fas/.fasta/.fna genome files found in %s" % genomes_dir)
+    if len(fichiers) < 5:
+        fail("at least 5 genomes are required (EasyCGTree cannot build a tree with fewer); got %d" % len(fichiers))
+
+    qualite = lire_checkm2(genomes_dir, results_dir, fichiers)
+
+    with open(results_dir + "/qc.txt", "w") as rapport:
+        rapport.write("Genome\tTaille(pb)\tGC(%)\tContigs\tCompleteness(%)\tContamination(%)\n")
+        for chemin in fichiers:
+            seqs = []
+            seq = ""
+            for ligne in open(chemin):
+                if ligne.startswith(">"):
+                    if seq:
+                        seqs.append(seq)
+                    seq = ""
+                else:
+                    seq += ligne.strip()
+            if seq:
+                seqs.append(seq)
+            total = sum(len(s) for s in seqs)
+            gc = sum(s.upper().count("G") + s.upper().count("C") for s in seqs)
+            nom = os.path.splitext(os.path.basename(chemin))[0]
+            comp, cont = qualite.get(nom, ("NA", "NA"))
+            rapport.write("%s\t%d\t%.1f\t%d\t%s\t%s\n" % (nom, total, 100 * gc / total, len(seqs), comp, cont))
+    print("    -> qc.txt created with Completeness and Contamination (%d genomes)" % len(fichiers))
+    return fichiers
+
+
+def etape_proteines(fichiers, proteins_dir):
+    announce(2)
+    os.makedirs(proteins_dir, exist_ok=True)
+    for chemin in fichiers:
+        nom = os.path.splitext(os.path.basename(chemin))[0]
+        run(["prodigal", "-i", chemin, "-a", proteins_dir + "/" + nom + ".faa", "-o", os.devnull, "-q"])
+    print("    -> proteins written to %s" % proteins_dir)
+
+
+def etape_ani(fichiers, results_dir, threads):
+    announce(3)
+    liste = results_dir + "/liste.txt"
+    with open(liste, "w") as f:
+        for g in fichiers:
+            f.write(g + "\n")
+    run(["fastANI", "--ql", liste, "--rl", liste,
+         "-o", results_dir + "/ani_resultats.txt", "-t", str(threads)])
+    print("    -> ani_resultats.txt created")
+
+
+def etape_aai(fichiers, results_dir):
+    announce(4)
+    aai_db = results_dir + "/aai_db"
+    os.makedirs(aai_db, exist_ok=True)
+    for chemin in fichiers:
+        nom = os.path.splitext(os.path.basename(chemin))[0]
+        run(["EzAAI", "extract", "-i", chemin, "-o", aai_db + "/" + nom + ".db", "-l", nom])
+    run(["EzAAI", "calculate", "-i", aai_db, "-j", aai_db,
+         "-o", results_dir + "/aai_resultats.tsv"])
+    print("    -> aai_resultats.tsv created")
+
+
+def etape_pocp(proteins_dir, results_dir):
+    announce(5)
+    run(["python", SCRIPTS + "/pocp.py", proteins_dir, results_dir + "/pocp_out"])
+    print("    -> pocp_out/pocp_matrice.tsv created")
+
+
+def etape_arbre(fichiers, results_dir, job_id, threads):
+    announce(6)
+    input_name = "job_" + job_id
+    entree = EASYCG + "/" + input_name
+    os.makedirs(entree, exist_ok=True)
+    for g in fichiers:
+        shutil.copy(g, entree)
+    run(["perl", "EasyCGTree.pl", "-input", input_name,
+         "-hmm", "bac120", "-tree", "sm", "-tree_app", "fasttree",
+         "-thread", str(threads)], cwd=EASYCG)
+    arbre = EASYCG + "/" + input_name + ".bac120.120.supermatrix.fasttree.tree"
+    if os.path.exists(arbre):
+        shutil.copy(arbre, results_dir + "/arbre.tree")
+        print("    -> arbre.tree copied to results")
+    else:
+        fail("tree file not found (%s) - EasyCGTree may have failed" % arbre)
+    cleanup_easycgtree(input_name)
+
+
+def cleanup_easycgtree(input_name):
+    """Remove this job's working files from the shared EasyCGTree tool directory."""
+    for path in glob.glob(EASYCG + "/" + input_name + "*"):
+        if os.path.isdir(path):
+            shutil.rmtree(path, ignore_errors=True)
+        else:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+
+
+def etape_figures(results_dir):
+    announce(7)
+    run(["Rscript", SCRIPTS + "/plot_all_web.R", results_dir])
+    print("    -> PNG figures created in %s" % results_dir)
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Run the taxonomy pipeline on an arbitrary genome folder.")
+    parser.add_argument("--genomes-dir", required=True, help="Folder containing the genome files")
+    parser.add_argument("--output-dir", required=True, help="Folder where proteins/ and results/ will be created")
+    parser.add_argument("--job-id", default=None, help="Unique id for this run (default: random uuid)")
+    parser.add_argument("--threads", type=int, default=4, help="Threads for fastANI/EasyCGTree")
+    args = parser.parse_args()
+
+    job_id = args.job_id or uuid.uuid4().hex[:12]
+    genomes_dir = os.path.abspath(args.genomes_dir)
+    proteins_dir = os.path.abspath(args.output_dir) + "/proteins"
+    results_dir = os.path.abspath(args.output_dir) + "/results"
+    os.makedirs(proteins_dir, exist_ok=True)
+    os.makedirs(results_dir, exist_ok=True)
+
+    print("===== PIPELINE START (job %s) =====" % job_id)
+    fichiers = etape_qc(genomes_dir, results_dir)
+    etape_proteines(fichiers, proteins_dir)
+    etape_ani(fichiers, results_dir, args.threads)
+    etape_aai(fichiers, results_dir)
+    etape_pocp(proteins_dir, results_dir)
+    etape_arbre(fichiers, results_dir, job_id, args.threads)
+    etape_figures(results_dir)
+    print("===== PIPELINE DONE =====")
+
+
+if __name__ == "__main__":
+    main()

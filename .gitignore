@@ -1,0 +1,10 @@
+genomes/
+proteins/
+results/
+logs/
+EasyCGTree4/
+webapp/
+__pycache__/
+*.pyc
+.Rhistory
+*.tar.gz
