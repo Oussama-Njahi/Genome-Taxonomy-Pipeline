@@ -7,7 +7,7 @@
 # jobs (one per web upload) can run without touching each other's files.
 #
 # Usage:
-#   python pipeline_web.py --genomes-dir <dir> --output-dir <dir> [--job-id <id>] [--threads 4]
+#   python pipeline_web.py --genomes-dir <dir> --output-dir <dir> [--job-id <id>] [--threads 4] [--steps qc,ani,aai]
 #
 # Progress is reported on stdout as lines "PROGRESS <n>/7 <label>" so a caller
 # (e.g. the FastAPI backend) can parse them to drive a progress bar.
@@ -29,6 +29,9 @@ STEPS = [
     "Phylogenomic tree (EasyCGTree)",
     "Figures (R)",
 ]
+
+# Cles utilisees avec --steps, dans le meme ordre que STEPS ci-dessus
+STEPS_KEYS = ["qc", "proteines", "ani", "aai", "pocp", "arbre", "figures"]
 
 SCRIPTS = os.path.dirname(os.path.abspath(__file__))
 BASE = os.path.dirname(SCRIPTS)
@@ -54,6 +57,30 @@ def run(cmd, **kwargs):
     result = subprocess.run(cmd, **kwargs)
     if result.returncode != 0:
         fail("command failed (exit code %d): %s" % (result.returncode, " ".join(str(c) for c in cmd)))
+
+
+def etapes_demandees(steps_arg):
+    """Traduit la valeur de --steps (texte) en liste de noms d'etapes valides."""
+    if steps_arg == "all":
+        return list(STEPS_KEYS)
+    choisies = [s.strip() for s in steps_arg.split(",") if s.strip()]
+    for s in choisies:
+        if s not in STEPS_KEYS:
+            fail("unknown step '%s' (valid steps: %s)" % (s, ", ".join(STEPS_KEYS)))
+    return choisies
+
+
+def lister_genomes(genomes_dir):
+    """Toujours necessaire : trouve les genomes et verifie qu'il y en a assez.
+    Rapide (juste un glob + un comptage) -> peut rester obligatoire sans cout."""
+    fichiers = sorted(glob.glob(genomes_dir + "/*.fas") +
+                       glob.glob(genomes_dir + "/*.fasta") +
+                       glob.glob(genomes_dir + "/*.fna"))
+    if not fichiers:
+        fail("no .fas/.fasta/.fna genome files found in %s" % genomes_dir)
+    if len(fichiers) < 5:
+        fail("at least 5 genomes are required (EasyCGTree cannot build a tree with fewer); got %d" % len(fichiers))
+    return fichiers
 
 
 def lire_checkm2(genomes_dir, results_dir, fichiers):
@@ -89,16 +116,11 @@ def lire_checkm2(genomes_dir, results_dir, fichiers):
     return qualite
 
 
-def etape_qc(genomes_dir, results_dir):
+def etape_qc(genomes_dir, results_dir, fichiers):
+    """Ne fait plus QUE CheckM2 + l'ecriture du rapport qc.txt.
+    La liste des genomes (fichiers) est desormais calculee AVANT, par
+    lister_genomes(), et transmise ici en parametre - comme les autres etapes."""
     announce(1)
-    fichiers = sorted(glob.glob(genomes_dir + "/*.fas") +
-                       glob.glob(genomes_dir + "/*.fasta") +
-                       glob.glob(genomes_dir + "/*.fna"))
-    if not fichiers:
-        fail("no .fas/.fasta/.fna genome files found in %s" % genomes_dir)
-    if len(fichiers) < 5:
-        fail("at least 5 genomes are required (EasyCGTree cannot build a tree with fewer); got %d" % len(fichiers))
-
     qualite = lire_checkm2(genomes_dir, results_dir, fichiers)
 
     with open(results_dir + "/qc.txt", "w") as rapport:
@@ -121,7 +143,6 @@ def etape_qc(genomes_dir, results_dir):
             comp, cont = qualite.get(nom, ("NA", "NA"))
             rapport.write("%s\t%d\t%.1f\t%d\t%s\t%s\n" % (nom, total, 100 * gc / total, len(seqs), comp, cont))
     print("    -> qc.txt created with Completeness and Contamination (%d genomes)" % len(fichiers))
-    return fichiers
 
 
 def etape_proteines(fichiers, proteins_dir):
@@ -205,7 +226,11 @@ def main():
     parser.add_argument("--output-dir", required=True, help="Folder where proteins/ and results/ will be created")
     parser.add_argument("--job-id", default=None, help="Unique id for this run (default: random uuid)")
     parser.add_argument("--threads", type=int, default=4, help="Threads for fastANI/EasyCGTree")
+    parser.add_argument("--steps", type=str, default="all",
+                         help="Comma-separated steps to run (" + ", ".join(STEPS_KEYS) + "). Default: all")
     args = parser.parse_args()
+
+    selection = etapes_demandees(args.steps)
 
     job_id = args.job_id or uuid.uuid4().hex[:12]
     genomes_dir = os.path.abspath(args.genomes_dir)
@@ -215,13 +240,30 @@ def main():
     os.makedirs(results_dir, exist_ok=True)
 
     print("===== PIPELINE START (job %s) =====" % job_id)
-    fichiers = etape_qc(genomes_dir, results_dir)
-    etape_proteines(fichiers, proteins_dir)
-    etape_ani(fichiers, results_dir, args.threads)
-    etape_aai(fichiers, results_dir)
-    etape_pocp(proteins_dir, results_dir)
-    etape_arbre(fichiers, results_dir, job_id, args.threads)
-    etape_figures(results_dir)
+    print("Steps selected: %s" % ", ".join(selection))
+
+    fichiers = lister_genomes(genomes_dir)   # toujours necessaire, rapide
+
+    if "qc" in selection:
+        etape_qc(genomes_dir, results_dir, fichiers)
+    if "proteines" in selection:
+        etape_proteines(fichiers, proteins_dir)
+    if "ani" in selection:
+        etape_ani(fichiers, results_dir, args.threads)
+    if "aai" in selection:
+        etape_aai(fichiers, results_dir)
+    if "pocp" in selection:
+        if not os.path.isdir(proteins_dir) or not glob.glob(proteins_dir + "/*.faa"):
+            print("    !! WARNING: no protein files found in %s" % proteins_dir)
+            print("    !! The 'proteines' step must be run at least once before POCP.")
+            print("    !! Re-run with --steps proteines,pocp")
+        else:
+            etape_pocp(proteins_dir, results_dir)
+    if "arbre" in selection:
+        etape_arbre(fichiers, results_dir, job_id, args.threads)
+    if "figures" in selection:
+        etape_figures(results_dir)
+
     print("===== PIPELINE DONE =====")
 
 
