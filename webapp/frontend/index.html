@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Genome Taxonomy Explorer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;1,600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+
+  <header class="topbar">
+    <div class="container topbar-inner">
+      <div class="brand">
+        <span class="brand-mark">GT</span>
+        <span class="brand-name">Genome Taxonomy Explorer</span>
+      </div>
+      <nav class="topnav">
+        <a href="#how-it-works">How it works</a>
+        <a href="#analyze">Analyze</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <!-- ============ LANDING ============ -->
+    <section class="hero">
+      <div class="container hero-inner">
+        <div class="hero-text">
+          <h1>Characterize bacterial genome taxonomy in one run.</h1>
+          <p class="hero-sub">
+            Upload a set of bacterial genome assemblies and get quality control,
+            ANI, AAI and POCP identity matrices plus a phylogenomic tree &mdash;
+            computed locally on your machine with FastANI, EzAAI, DIAMOND and
+            EasyCGTree.
+          </p>
+          <a href="#analyze" class="btn btn-primary btn-large">Start Analysis</a>
+        </div>
+      </div>
+
+      <div class="container">
+        <div class="hero-stats" id="how-it-works">
+          <div class="stat">
+            <div class="stat-num">1</div>
+            <div class="stat-label">Quality Control<br />basic genome stats</div>
+          </div>
+          <div class="stat">
+            <div class="stat-num">2</div>
+            <div class="stat-label">ANI &amp; AAI<br />pairwise identity</div>
+          </div>
+          <div class="stat">
+            <div class="stat-num">3</div>
+            <div class="stat-label">POCP<br />genus delineation</div>
+          </div>
+          <div class="stat">
+            <div class="stat-num">4</div>
+            <div class="stat-label">Phylogenomic tree<br />120 core genes</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ UPLOAD / ANALYZE ============ -->
+    <section class="analyze" id="analyze">
+      <div class="container">
+        <h2>Analyze your genomes</h2>
+        <p class="section-sub">
+          Upload at least 5 genome assemblies (<code>.fas</code>, <code>.fasta</code>,
+          <code>.fna</code>). A phylogenomic tree needs at least 5 genomes to be built.
+        </p>
+
+        <div class="card">
+          <div id="dropzone" class="dropzone">
+            <input type="file" id="fileInput" multiple accept=".fas,.fasta,.fna" hidden />
+            <div class="dropzone-icon">&#10038;</div>
+            <p class="dropzone-title">Drag &amp; drop genome files here</p>
+            <p class="dropzone-sub">or click to browse your computer</p>
+          </div>
+
+          <ul id="fileList" class="file-list"></ul>
+
+          <div class="steps-picker">
+            <p class="steps-picker-label">Steps to run</p>
+            <div class="steps-grid">
+              <label class="step-option"><input type="checkbox" class="step-checkbox" value="qc" checked /> Quality Control</label>
+              <label class="step-option"><input type="checkbox" class="step-checkbox" value="proteines" checked /> Protein prediction</label>
+              <label class="step-option"><input type="checkbox" class="step-checkbox" value="ani" checked /> ANI</label>
+              <label class="step-option"><input type="checkbox" class="step-checkbox" value="aai" checked /> AAI</label>
+              <label class="step-option"><input type="checkbox" class="step-checkbox" value="pocp" checked /> POCP</label>
+              <label class="step-option"><input type="checkbox" class="step-checkbox" value="arbre" checked /> Phylogenomic tree</label>
+              <label class="step-option"><input type="checkbox" class="step-checkbox" value="figures" checked /> Figures</label>
+            </div>
+          </div>
+
+          <div class="analyze-actions">
+            <span id="fileCount" class="file-count">No files selected</span>
+            <button id="analyzeBtn" class="btn btn-primary" disabled>Analyze</button>
+          </div>
+
+          <div id="messageBox" class="message-box hidden"></div>
+        </div>
+
+        <!-- Progress -->
+        <div id="progressCard" class="card progress-card hidden">
+          <div class="progress-head">
+            <span id="progressLabel">Starting...</span>
+            <span id="progressPct">0%</span>
+          </div>
+          <div class="progress-track">
+            <div id="progressFill" class="progress-fill"></div>
+          </div>
+          <details class="log-details">
+            <summary>Show run log</summary>
+            <pre id="logBox" class="log-box"></pre>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ RESULTS ============ -->
+    <section class="results hidden" id="resultsSection">
+      <div class="container">
+        <h2>Results</h2>
+
+        <div class="tabs">
+          <button class="tab-btn active" data-tab="tab-qc">Quality Control</button>
+          <button class="tab-btn" data-tab="tab-ani">ANI</button>
+          <button class="tab-btn" data-tab="tab-aai">AAI</button>
+          <button class="tab-btn" data-tab="tab-pocp">POCP</button>
+          <button class="tab-btn" data-tab="tab-tree">Phylogenomic Tree</button>
+        </div>
+
+        <div id="tab-qc" class="tab-panel active">
+          <div class="panel-head">
+            <h3>Genome quality control</h3>
+            <a id="dl-qc" class="btn btn-ghost" download>Download qc.txt</a>
+          </div>
+          <div class="table-wrap">
+            <table id="qcTable" class="data-table"></table>
+          </div>
+        </div>
+
+        <div id="tab-ani" class="tab-panel">
+          <div class="panel-head">
+            <h3>Average Nucleotide Identity (ANI)</h3>
+            <a id="dl-ani" class="btn btn-ghost" download>Download ani_resultats.txt</a>
+          </div>
+          <p class="panel-note">Species threshold &mdash; genomes above ~95% ANI belong to the same species.</p>
+          <img id="img-ani" class="heatmap" alt="ANI heatmap" />
+        </div>
+
+        <div id="tab-aai" class="tab-panel">
+          <div class="panel-head">
+            <h3>Average Amino acid Identity (AAI)</h3>
+            <a id="dl-aai" class="btn btn-ghost" download>Download aai_resultats.tsv</a>
+          </div>
+          <p class="panel-note">Approximate genus boundary around ~65% AAI.</p>
+          <img id="img-aai" class="heatmap" alt="AAI heatmap" />
+        </div>
+
+        <div id="tab-pocp" class="tab-panel">
+          <div class="panel-head">
+            <h3>Percentage of Conserved Proteins (POCP)</h3>
+            <a id="dl-pocp" class="btn btn-ghost" download>Download pocp_matrice.tsv</a>
+          </div>
+          <p class="panel-note">Genus threshold &mdash; genomes above 50% POCP belong to the same genus.</p>
+          <img id="img-pocp" class="heatmap" alt="POCP heatmap" />
+        </div>
+
+        <div id="tab-tree" class="tab-panel">
+          <div class="panel-head">
+            <h3>Phylogenomic tree (bac120 core genes)</h3>
+            <div class="panel-actions">
+              <a id="dl-tree-png" class="btn btn-ghost" download>Download tree.png</a>
+              <a id="dl-tree-newick" class="btn btn-ghost" download>Download arbre.tree (Newick)</a>
+            </div>
+          </div>
+          <img id="img-tree" class="tree-image" alt="Phylogenomic tree" />
+        </div>
+
+        <div class="analyze-again">
+          <button id="newAnalysisBtn" class="btn btn-secondary">Start a new analysis</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      Genome Taxonomy Explorer &mdash; runs entirely on your local machine.
+    </div>
+  </footer>
+
+  <div class="book-frame" aria-hidden="true">
+    <svg class="book-corner book-corner-tl" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z"/><circle cx="12" cy="12" r="2" fill="#F5EFEB"/></svg>
+    <svg class="book-corner book-corner-tr" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z"/><circle cx="12" cy="12" r="2" fill="#F5EFEB"/></svg>
+    <svg class="book-corner book-corner-bl" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z"/><circle cx="12" cy="12" r="2" fill="#F5EFEB"/></svg>
+    <svg class="book-corner book-corner-br" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z"/><circle cx="12" cy="12" r="2" fill="#F5EFEB"/></svg>
+  </div>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>

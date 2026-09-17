@@ -3,7 +3,7 @@ proteins/
 results/
 logs/
 EasyCGTree4/
-webapp/
+webapp/jobs/
 __pycache__/
 *.pyc
 .Rhistory
