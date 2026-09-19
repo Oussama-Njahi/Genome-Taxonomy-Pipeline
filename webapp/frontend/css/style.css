@@ -143,7 +143,7 @@ code {
   z-index: 2;
   margin-top: 24px;
   display: grid;
-  grid-template-columns: repeat(9, 1fr);
+  grid-template-columns: repeat(7, 1fr);
   background: rgba(247, 243, 233, 0.94);
   backdrop-filter: blur(4px);
   border-top: 1px solid var(--brass);
