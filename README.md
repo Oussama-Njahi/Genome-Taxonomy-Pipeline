@@ -95,4 +95,4 @@ Results (quality report, ANI/AAI/POCP matrices, tree, figures) are written to `r
 
 ## Author
 
-Oussama — Bioinformatics internship, June–August 2026, IRA Médenine (supervisor: Imed Sbissi).
+Oussama Njahi — Bioinformatics internship, June 2026, IRA Médenine (supervisor: Imed Sbissi).
