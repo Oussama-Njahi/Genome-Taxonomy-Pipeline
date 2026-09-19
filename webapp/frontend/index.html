@@ -40,23 +40,146 @@
         </div>
       </div>
 
-      <div class="container">
-        <div class="hero-stats" id="how-it-works">
-          <div class="stat">
-            <div class="stat-num">1</div>
-            <div class="stat-label">Quality Control<br />basic genome stats</div>
+      <div class="container container-wide">
+        <div class="workflow-head" id="how-it-works">
+          <h2>How it works</h2>
+          <p class="section-sub">Every step below is independent — use the checkboxes on the Analyze page to run exactly the ones you need. Two steps expect another one to have run first: CheckM2 needs Quality Control, and POCP needs Protein prediction — skip them and that one step is skipped too, with a clear warning, the rest of your selection still runs.</p>
+        </div>
+        <div class="workflow">
+          <div class="workflow-step">
+            <span class="workflow-index">01</span>
+            <span class="workflow-node-wrap">
+              <span class="workflow-node">
+                <svg class="workflow-icon" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M27 8 H37" />
+                  <path d="M27 8 V38 C27 46 37 46 37 38 V8" />
+                  <path d="M27 30 H37" />
+                  <circle cx="31" cy="36" r="1.6" fill="currentColor" stroke="none" />
+                  <circle cx="34" cy="33" r="1.2" fill="currentColor" stroke="none" />
+                </svg>
+              </span>
+            </span>
+            <span class="workflow-label">Quality Control</span>
+            <span class="workflow-desc">Genome size, GC% and contig count for each assembly.</span>
           </div>
-          <div class="stat">
-            <div class="stat-num">2</div>
-            <div class="stat-label">ANI &amp; AAI<br />pairwise identity</div>
+          <div class="workflow-step">
+            <span class="workflow-index">02</span>
+            <span class="workflow-node-wrap">
+              <span class="workflow-node">
+                <svg class="workflow-icon" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M32 6 L50 12 V26 C50 38 32 46 32 46 C32 46 14 38 14 26 V12 Z" />
+                  <path d="M23 26 L29 33 L42 18" />
+                </svg>
+              </span>
+            </span>
+            <span class="workflow-label">CheckM2</span>
+            <span class="workflow-desc">Estimates completeness and contamination from marker genes.</span>
+            <span class="workflow-req">Needs Quality Control to have run first</span>
           </div>
-          <div class="stat">
-            <div class="stat-num">3</div>
-            <div class="stat-label">POCP<br />genus delineation</div>
+          <div class="workflow-step">
+            <span class="workflow-index">03</span>
+            <span class="workflow-node-wrap">
+              <span class="workflow-node">
+                <svg class="workflow-icon" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M18 6 C36 6 0 22 18 22 C36 22 0 38 18 38 C36 38 0 54 18 54" />
+                  <path d="M46 6 C28 6 64 22 46 22 C28 22 64 38 46 38 C28 38 64 54 46 54" opacity="0.55" />
+                </svg>
+              </span>
+            </span>
+            <span class="workflow-label">Protein prediction</span>
+            <span class="workflow-desc">Predicts genes and proteins from each genome with Prodigal.</span>
           </div>
-          <div class="stat">
-            <div class="stat-num">4</div>
-            <div class="stat-label">Phylogenomic tree<br />120 core genes</div>
+          <div class="workflow-step">
+            <span class="workflow-index">04</span>
+            <span class="workflow-node-wrap">
+              <span class="workflow-node">
+                <svg class="workflow-icon" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="8" y1="24" x2="56" y2="24" />
+                  <line x1="14" y1="19" x2="14" y2="29" /><line x1="24" y1="19" x2="24" y2="29" /><line x1="34" y1="19" x2="34" y2="29" /><line x1="44" y1="19" x2="44" y2="29" />
+                  <line x1="8" y1="42" x2="56" y2="42" />
+                  <line x1="14" y1="37" x2="14" y2="47" /><line x1="24" y1="37" x2="24" y2="47" /><line x1="34" y1="37" x2="34" y2="47" /><line x1="44" y1="37" x2="44" y2="47" />
+                  <line x1="14" y1="29" x2="14" y2="37" stroke-dasharray="2 2" /><line x1="34" y1="29" x2="34" y2="37" stroke-dasharray="2 2" />
+                </svg>
+              </span>
+            </span>
+            <span class="workflow-label">ANI</span>
+            <span class="workflow-desc">Whole-genome DNA similarity between every pair, via FastANI.</span>
+          </div>
+          <div class="workflow-step">
+            <span class="workflow-index">05</span>
+            <span class="workflow-node-wrap">
+              <span class="workflow-node">
+                <svg class="workflow-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M6 12 Q20 12 20 20 Q20 28 34 28" />
+                  <path d="M6 28 Q20 28 20 20 Q20 12 34 12" opacity="0.5" />
+                  <circle cx="20" cy="20" r="1.4" fill="currentColor" stroke="none" />
+                </svg>
+              </span>
+            </span>
+            <span class="workflow-label">dDDH</span>
+            <span class="workflow-desc">In-silico DNA-DNA hybridization estimate from BLASTN alignments.</span>
+          </div>
+          <div class="workflow-step">
+            <span class="workflow-index">06</span>
+            <span class="workflow-node-wrap">
+              <span class="workflow-node">
+                <svg class="workflow-icon" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="10" y="16" width="9" height="9" /><rect x="26" y="16" width="9" height="9" /><rect x="42" y="16" width="9" height="9" />
+                  <rect x="10" y="40" width="9" height="9" /><rect x="26" y="40" width="9" height="9" /><rect x="42" y="40" width="9" height="9" />
+                  <line x1="14.5" y1="25" x2="14.5" y2="40" stroke-dasharray="2 2" /><line x1="46.5" y1="25" x2="46.5" y2="40" stroke-dasharray="2 2" />
+                </svg>
+              </span>
+            </span>
+            <span class="workflow-label">AAI</span>
+            <span class="workflow-desc">Average amino-acid identity between proteomes, via EzAAI.</span>
+          </div>
+          <div class="workflow-step">
+            <span class="workflow-index">07</span>
+            <span class="workflow-node-wrap">
+              <span class="workflow-node">
+                <svg class="workflow-icon" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="24" cy="24" r="10" /><circle cx="42" cy="22" r="8" /><circle cx="34" cy="40" r="9" /><circle cx="16" cy="42" r="7" /><circle cx="46" cy="40" r="6" />
+                </svg>
+              </span>
+            </span>
+            <span class="workflow-label">POCP</span>
+            <span class="workflow-desc">Share of conserved proteins between genomes, via DIAMOND.</span>
+            <span class="workflow-req">Needs Protein prediction to have run first</span>
+          </div>
+          <div class="workflow-step">
+            <span class="workflow-index">08</span>
+            <span class="workflow-node-wrap">
+              <span class="workflow-node">
+                <svg class="workflow-icon" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="10" y1="32" x2="24" y2="32" />
+                  <line x1="24" y1="14" x2="24" y2="50" />
+                  <line x1="24" y1="14" x2="40" y2="14" />
+                  <line x1="24" y1="50" x2="34" y2="50" />
+                  <line x1="34" y1="42" x2="34" y2="58" />
+                  <line x1="34" y1="42" x2="48" y2="42" />
+                  <line x1="34" y1="58" x2="48" y2="58" />
+                  <circle cx="40" cy="14" r="1.6" fill="currentColor" stroke="none" /><circle cx="48" cy="42" r="1.6" fill="currentColor" stroke="none" /><circle cx="48" cy="58" r="1.6" fill="currentColor" stroke="none" />
+                </svg>
+              </span>
+            </span>
+            <span class="workflow-label">Phylogenomic tree</span>
+            <span class="workflow-desc">Evolutionary tree built from shared marker genes with EasyCGTree.</span>
+          </div>
+          <div class="workflow-step">
+            <span class="workflow-index">09</span>
+            <span class="workflow-node-wrap">
+              <span class="workflow-node">
+                <svg class="workflow-icon" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="12" y1="50" x2="52" y2="50" />
+                  <line x1="12" y1="50" x2="12" y2="14" />
+                  <rect x="20" y="34" width="8" height="16" />
+                  <rect x="32" y="22" width="8" height="28" />
+                  <rect x="44" y="28" width="8" height="22" />
+                </svg>
+              </span>
+            </span>
+            <span class="workflow-label">Figures</span>
+            <span class="workflow-desc">Heatmaps and a tree plot summarizing all the results.</span>
           </div>
         </div>
       </div>
