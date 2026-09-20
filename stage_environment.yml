@@ -7,6 +7,7 @@ dependencies:
   - ezaai
   - prodigal
   - diamond
+  - blast
   - checkm-genome
   - hmmer
   - mafft
