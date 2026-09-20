@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # pipeline_web.py - Parameterized version of pipeline.py for the web interface.
 #
-# Same 7 steps, same tools, same logic as pipeline.py. The only difference is
+# Same 9 steps, same tools, same logic as pipeline.py. The only difference is
 # that genome folder, protein folder and results folder are passed as
 # command-line arguments instead of being hardcoded, so several independent
 # jobs (one per web upload) can run without touching each other's files.
@@ -9,7 +9,7 @@
 # Usage:
 #   python pipeline_web.py --genomes-dir <dir> --output-dir <dir> [--job-id <id>] [--threads 4] [--steps qc,ani,aai]
 #
-# Progress is reported on stdout as lines "PROGRESS <n>/7 <label>" so a caller
+# Progress is reported on stdout as lines "PROGRESS <n>/9 <label>" so a caller
 # (e.g. the FastAPI backend) can parse them to drive a progress bar.
 
 import argparse
@@ -22,8 +22,10 @@ import uuid
 
 STEPS = [
     "Quality control",
+    "CheckM2 (completeness/contamination)",
     "Protein prediction (Prodigal)",
     "ANI (FastANI)",
+    "dDDH (BLASTN, GBDP formula 2)",
     "AAI (EzAAI)",
     "POCP (DIAMOND)",
     "Phylogenomic tree (EasyCGTree)",
@@ -31,7 +33,7 @@ STEPS = [
 ]
 
 # Cles utilisees avec --steps, dans le meme ordre que STEPS ci-dessus
-STEPS_KEYS = ["qc", "proteines", "ani", "aai", "pocp", "arbre", "figures"]
+STEPS_KEYS = ["qc", "checkm2", "proteines", "ani", "dddh", "aai", "pocp", "arbre", "figures"]
 
 SCRIPTS = os.path.dirname(os.path.abspath(__file__))
 BASE = os.path.dirname(SCRIPTS)
@@ -116,13 +118,11 @@ def lire_checkm2(genomes_dir, results_dir, fichiers):
     return qualite
 
 
-def etape_qc(genomes_dir, results_dir, fichiers):
-    """Ne fait plus QUE CheckM2 + l'ecriture du rapport qc.txt.
-    La liste des genomes (fichiers) est desormais calculee AVANT, par
-    lister_genomes(), et transmise ici en parametre - comme les autres etapes."""
+def etape_qc(fichiers, results_dir):
+    """Stats de base uniquement (taille, GC%, contigs) - rapide, pas de CheckM2.
+    Completeness/Contamination sont ecrits a "NA" ; lancer aussi l'etape
+    'checkm2' pour les remplir (voir etape_checkm2 ci-dessous)."""
     announce(1)
-    qualite = lire_checkm2(genomes_dir, results_dir, fichiers)
-
     with open(results_dir + "/qc.txt", "w") as rapport:
         rapport.write("Genome\tTaille(pb)\tGC(%)\tContigs\tCompleteness(%)\tContamination(%)\n")
         for chemin in fichiers:
@@ -140,13 +140,32 @@ def etape_qc(genomes_dir, results_dir, fichiers):
             total = sum(len(s) for s in seqs)
             gc = sum(s.upper().count("G") + s.upper().count("C") for s in seqs)
             nom = os.path.splitext(os.path.basename(chemin))[0]
-            comp, cont = qualite.get(nom, ("NA", "NA"))
-            rapport.write("%s\t%d\t%.1f\t%d\t%s\t%s\n" % (nom, total, 100 * gc / total, len(seqs), comp, cont))
-    print("    -> qc.txt created with Completeness and Contamination (%d genomes)" % len(fichiers))
+            rapport.write("%s\t%d\t%.1f\t%d\tNA\tNA\n" % (nom, total, 100 * gc / total, len(seqs)))
+    print("    -> qc.txt created (Completeness/Contamination = NA; also run 'checkm2' step to fill them in)")
+
+
+def etape_checkm2(genomes_dir, results_dir, fichiers):
+    """Lance CheckM2 et met a jour les colonnes Completeness/Contamination
+    de qc.txt (qui doit deja exister, ecrit par l'etape 'qc' - verifie par
+    l'appelant dans main(), comme pour la dependance proteines -> pocp)."""
+    announce(2)
+    qc_path = results_dir + "/qc.txt"
+    qualite = lire_checkm2(genomes_dir, results_dir, fichiers)
+    with open(qc_path) as f:
+        lignes = f.readlines()
+    nouvelles_lignes = [lignes[0]]
+    for ligne in lignes[1:]:
+        cols = ligne.rstrip("\n").split("\t")
+        comp, cont = qualite.get(cols[0], ("NA", "NA"))
+        cols[4], cols[5] = comp, cont
+        nouvelles_lignes.append("\t".join(cols) + "\n")
+    with open(qc_path, "w") as f:
+        f.writelines(nouvelles_lignes)
+    print("    -> qc.txt updated with Completeness and Contamination")
 
 
 def etape_proteines(fichiers, proteins_dir):
-    announce(2)
+    announce(3)
     os.makedirs(proteins_dir, exist_ok=True)
     for chemin in fichiers:
         nom = os.path.splitext(os.path.basename(chemin))[0]
@@ -155,7 +174,7 @@ def etape_proteines(fichiers, proteins_dir):
 
 
 def etape_ani(fichiers, results_dir, threads):
-    announce(3)
+    announce(4)
     liste = results_dir + "/liste.txt"
     with open(liste, "w") as f:
         for g in fichiers:
@@ -165,8 +184,14 @@ def etape_ani(fichiers, results_dir, threads):
     print("    -> ani_resultats.txt created")
 
 
+def etape_dddh(genomes_dir, results_dir):
+    announce(5)
+    run(["python", SCRIPTS + "/dddh.py", genomes_dir, results_dir + "/dddh_out"])
+    print("    -> dddh_out/dddh_distance.tsv and dddh_similarite.tsv created")
+
+
 def etape_aai(fichiers, results_dir):
-    announce(4)
+    announce(6)
     aai_db = results_dir + "/aai_db"
     os.makedirs(aai_db, exist_ok=True)
     for chemin in fichiers:
@@ -178,13 +203,13 @@ def etape_aai(fichiers, results_dir):
 
 
 def etape_pocp(proteins_dir, results_dir):
-    announce(5)
+    announce(7)
     run(["python", SCRIPTS + "/pocp.py", proteins_dir, results_dir + "/pocp_out"])
     print("    -> pocp_out/pocp_matrice.tsv created")
 
 
 def etape_arbre(fichiers, results_dir, job_id, threads):
-    announce(6)
+    announce(8)
     input_name = "job_" + job_id
     entree = EASYCG + "/" + input_name
     os.makedirs(entree, exist_ok=True)
@@ -215,7 +240,7 @@ def cleanup_easycgtree(input_name):
 
 
 def etape_figures(results_dir):
-    announce(7)
+    announce(9)
     run(["Rscript", SCRIPTS + "/plot_all_web.R", results_dir])
     print("    -> PNG figures created in %s" % results_dir)
 
@@ -245,11 +270,20 @@ def main():
     fichiers = lister_genomes(genomes_dir)   # toujours necessaire, rapide
 
     if "qc" in selection:
-        etape_qc(genomes_dir, results_dir, fichiers)
+        etape_qc(fichiers, results_dir)
+    if "checkm2" in selection:
+        if not os.path.exists(results_dir + "/qc.txt"):
+            print("    !! WARNING: qc.txt not found in %s" % results_dir)
+            print("    !! The 'qc' step must be run at least once before 'checkm2'.")
+            print("    !! Re-run with --steps qc,checkm2")
+        else:
+            etape_checkm2(genomes_dir, results_dir, fichiers)
     if "proteines" in selection:
         etape_proteines(fichiers, proteins_dir)
     if "ani" in selection:
         etape_ani(fichiers, results_dir, args.threads)
+    if "dddh" in selection:
+        etape_dddh(genomes_dir, results_dir)
     if "aai" in selection:
         etape_aai(fichiers, results_dir)
     if "pocp" in selection:
