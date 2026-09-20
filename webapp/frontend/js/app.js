@@ -13,6 +13,7 @@ const progressLabel = document.getElementById("progressLabel");
 const progressPct = document.getElementById("progressPct");
 const progressFill = document.getElementById("progressFill");
 const logBox = document.getElementById("logBox");
+const cancelBtn = document.getElementById("cancelBtn");
 
 const resultsSection = document.getElementById("resultsSection");
 const newAnalysisBtn = document.getElementById("newAnalysisBtn");
@@ -22,6 +23,7 @@ const stepCheckboxes = document.querySelectorAll(".step-checkbox");
 const ALLOWED_EXT = [".fas", ".fasta", ".fna"];
 let selectedFiles = [];
 let pollTimer = null;
+let currentJobId = null;
 
 function getSelectedSteps() {
   return Array.from(stepCheckboxes)
@@ -133,6 +135,7 @@ dropzone.addEventListener("drop", (e) => {
 
 analyzeBtn.addEventListener("click", startAnalysis);
 newAnalysisBtn.addEventListener("click", resetToUpload);
+cancelBtn.addEventListener("click", cancelAnalysis);
 
 async function startAnalysis() {
   clearMessage();
@@ -162,9 +165,29 @@ async function startAnalysis() {
   }
 
   const data = await response.json();
+  currentJobId = data.job_id;
   progressCard.classList.remove("hidden");
+  cancelBtn.disabled = false;
   logBox.textContent = "";
   pollStatus(data.job_id);
+}
+
+async function cancelAnalysis() {
+  if (!currentJobId) return;
+  cancelBtn.disabled = true;
+  try {
+    await fetch(`/api/jobs/${currentJobId}/cancel`, { method: "POST" });
+  } catch (err) {
+    // network hiccup: the job keeps running, the next status poll will reflect it
+  }
+  backToUploadState("Analysis cancelled. Adjust your selection and click Analyze again.", "info");
+}
+
+function backToUploadState(message, kind) {
+  if (pollTimer) clearInterval(pollTimer);
+  progressCard.classList.add("hidden");
+  if (message) showMessage(message, kind); else clearMessage();
+  updateAnalyzeButtonState();
 }
 
 async function safeDetail(response) {
@@ -193,9 +216,9 @@ function pollStatus(jobId) {
       clearInterval(pollTimer);
       loadResults(jobId);
     } else if (state.status === "error") {
-      clearInterval(pollTimer);
-      showMessage(state.error || "The pipeline failed. See the run log for details.", "error");
-      analyzeBtn.disabled = false;
+      backToUploadState(state.error || "The pipeline failed. See the run log for details.", "error");
+    } else if (state.status === "cancelled") {
+      backToUploadState("Analysis cancelled. Adjust your selection and click Analyze again.", "info");
     }
   }, 1500);
 }
@@ -221,12 +244,14 @@ async function loadResults(jobId) {
   renderQcTable(data.qc);
 
   document.getElementById("img-ani").src = data.files.heatmap_ani;
+  document.getElementById("img-dddh").src = data.files.heatmap_dddh;
   document.getElementById("img-aai").src = data.files.heatmap_aai;
   document.getElementById("img-pocp").src = data.files.heatmap_pocp;
   document.getElementById("img-tree").src = data.files.tree_png;
 
   document.getElementById("dl-qc").href = data.files.qc;
   document.getElementById("dl-ani").href = data.files.ani;
+  document.getElementById("dl-dddh").href = data.files.dddh;
   document.getElementById("dl-aai").href = data.files.aai;
   document.getElementById("dl-pocp").href = data.files.pocp;
   document.getElementById("dl-tree-png").href = data.files.tree_png;

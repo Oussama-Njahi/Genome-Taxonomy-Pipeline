@@ -6,7 +6,7 @@
   <title>Genome Taxonomy Explorer</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;1,600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Lato:wght@400;700;900&family=Roboto+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/css/style.css" />
 </head>
 <body>
@@ -14,8 +14,46 @@
   <header class="topbar">
     <div class="container topbar-inner">
       <div class="brand">
-        <span class="brand-mark">GT</span>
-        <span class="brand-name">Genome Taxonomy Explorer</span>
+        <span class="brand-mark">
+          <svg aria-hidden="true" viewBox="0 0 200 240" xmlns="http://www.w3.org/2000/svg">
+            <path class="brand-shield" d="M 26,18 L 174,18 L 174,112 C 174,175 142,206 100,228 C 58,206 26,175 26,112 Z" />
+            <path class="brand-shield-inner" d="M 34,26 L 166,26 L 166,110 C 166,168 138,196 100,216 C 62,196 34,168 34,110 Z" />
+            <circle class="brand-fleuron" cx="26" cy="18" r="3" />
+            <circle class="brand-fleuron" cx="174" cy="18" r="3" />
+
+            <g class="brand-helix">
+              <path d="M 100,214 C 116,204 116,192 100,182 C 84,172 84,160 100,150 C 116,140 116,128 100,118 C 84,108 84,96 100,86 C 116,76 116,64 100,54" />
+              <path d="M 100,214 C 84,204 84,192 100,182 C 116,172 116,160 100,150 C 84,140 84,128 100,118 C 116,108 116,96 100,86 C 84,76 84,64 100,54" />
+            </g>
+
+            <g class="brand-tree">
+              <path d="M 100,214 L 100,148" />
+              <path d="M 100,148 L 62,108" />
+              <path d="M 100,148 L 138,108" />
+              <path d="M 62,108 L 42,70" />
+              <path d="M 62,108 L 78,74" />
+              <path d="M 138,108 L 158,70" />
+              <path d="M 138,108 L 122,74" />
+            </g>
+
+            <g class="brand-microbe">
+              <circle cx="100" cy="148" r="3.6" />
+              <circle cx="62" cy="108" r="3.2" />
+              <circle cx="138" cy="108" r="3.2" />
+              <circle cx="42" cy="70" r="5" />
+              <circle cx="78" cy="74" r="4" />
+              <circle cx="158" cy="70" r="5" />
+              <circle cx="122" cy="74" r="4" />
+            </g>
+            <g class="brand-microbe-ring">
+              <circle cx="42" cy="70" r="5" />
+              <circle cx="158" cy="70" r="5" />
+              <circle cx="78" cy="74" r="4" />
+              <circle cx="122" cy="74" r="4" />
+            </g>
+          </svg>
+          <span class="brand-abbr">TGA</span>
+        </span>
       </div>
       <nav class="topnav">
         <a href="#how-it-works">How it works</a>
@@ -29,21 +67,27 @@
     <section class="hero">
       <div class="container hero-inner">
         <div class="hero-text">
-          <h1>Characterize bacterial genome taxonomy in one run.</h1>
+          <h1>Taxo Genomics Analyses, in one run!</h1>
           <p class="hero-sub">
-            Upload a set of bacterial genome assemblies and get quality control,
-            ANI, AAI and POCP identity matrices plus a phylogenomic tree &mdash;
-            computed locally on your machine with FastANI, EzAAI, DIAMOND and
-            EasyCGTree.
+            Upload a set of bacterial genome assemblies and get a complete
+            taxonomic profile in return: genome quality with CheckM2,
+            pairwise identity across ANI, dDDH, AAI and POCP, and a
+            phylogenomic tree built with FastANI, BLASTN, EzAAI, DIAMOND and
+            EasyCGTree. Results come with ready-to-read heatmaps and a tree
+            figure, not just raw numbers.
+
+            <strong><br>Every step is optional: pick exactly the analyses you need.</strong>
           </p>
           <a href="#analyze" class="btn btn-primary btn-large">Start Analysis</a>
         </div>
       </div>
 
+      <div class="hero-connector" aria-hidden="true"></div>
+
       <div class="container container-wide">
         <div class="workflow-head" id="how-it-works">
           <h2>How it works</h2>
-          <p class="section-sub">Every step below is independent — use the checkboxes on the Analyze page to run exactly the ones you need. One step expects another one to have run first: POCP needs Protein prediction — skip it and POCP is skipped too, with a clear warning, the rest of your selection still runs.</p>
+          <p class="section-sub">Every step below is independent — use the checkboxes on the Analyze page to run exactly the ones you need. Two steps expect another one to have run first: CheckM2 needs Quality Control, and POCP needs Protein prediction — skip them and that one step is skipped too, with a clear warning, the rest of your selection still runs.</p>
         </div>
         <div class="workflow">
           <div class="workflow-step">
@@ -67,6 +111,20 @@
             <span class="workflow-node-wrap">
               <span class="workflow-node">
                 <svg class="workflow-icon" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M32 6 L50 12 V26 C50 38 32 46 32 46 C32 46 14 38 14 26 V12 Z" />
+                  <path d="M23 26 L29 33 L42 18" />
+                </svg>
+              </span>
+            </span>
+            <span class="workflow-label">CheckM2</span>
+            <span class="workflow-desc">Estimates completeness and contamination from marker genes.</span>
+            <span class="workflow-req">Needs Quality Control to have run first</span>
+          </div>
+          <div class="workflow-step">
+            <span class="workflow-index">03</span>
+            <span class="workflow-node-wrap">
+              <span class="workflow-node">
+                <svg class="workflow-icon" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M18 6 C36 6 0 22 18 22 C36 22 0 38 18 38 C36 38 0 54 18 54" />
                   <path d="M46 6 C28 6 64 22 46 22 C28 22 64 38 46 38 C28 38 64 54 46 54" opacity="0.55" />
                 </svg>
@@ -76,7 +134,7 @@
             <span class="workflow-desc">Predicts genes and proteins from each genome with Prodigal.</span>
           </div>
           <div class="workflow-step">
-            <span class="workflow-index">03</span>
+            <span class="workflow-index">04</span>
             <span class="workflow-node-wrap">
               <span class="workflow-node">
                 <svg class="workflow-icon" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
@@ -92,7 +150,21 @@
             <span class="workflow-desc">Whole-genome DNA similarity between every pair, via FastANI.</span>
           </div>
           <div class="workflow-step">
-            <span class="workflow-index">04</span>
+            <span class="workflow-index">05</span>
+            <span class="workflow-node-wrap">
+              <span class="workflow-node">
+                <svg class="workflow-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M6 12 Q20 12 20 20 Q20 28 34 28" />
+                  <path d="M6 28 Q20 28 20 20 Q20 12 34 12" opacity="0.5" />
+                  <circle cx="20" cy="20" r="1.4" fill="currentColor" stroke="none" />
+                </svg>
+              </span>
+            </span>
+            <span class="workflow-label">dDDH</span>
+            <span class="workflow-desc">In-silico DNA-DNA hybridization estimate from BLASTN alignments.</span>
+          </div>
+          <div class="workflow-step">
+            <span class="workflow-index">06</span>
             <span class="workflow-node-wrap">
               <span class="workflow-node">
                 <svg class="workflow-icon" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
@@ -106,7 +178,7 @@
             <span class="workflow-desc">Average amino-acid identity between proteomes, via EzAAI.</span>
           </div>
           <div class="workflow-step">
-            <span class="workflow-index">05</span>
+            <span class="workflow-index">07</span>
             <span class="workflow-node-wrap">
               <span class="workflow-node">
                 <svg class="workflow-icon" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
@@ -119,7 +191,7 @@
             <span class="workflow-req">Needs Protein prediction to have run first</span>
           </div>
           <div class="workflow-step">
-            <span class="workflow-index">06</span>
+            <span class="workflow-index">08</span>
             <span class="workflow-node-wrap">
               <span class="workflow-node">
                 <svg class="workflow-icon" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
@@ -138,7 +210,7 @@
             <span class="workflow-desc">Evolutionary tree built from shared marker genes with EasyCGTree.</span>
           </div>
           <div class="workflow-step">
-            <span class="workflow-index">07</span>
+            <span class="workflow-index">09</span>
             <span class="workflow-node-wrap">
               <span class="workflow-node">
                 <svg class="workflow-icon" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
@@ -179,13 +251,15 @@
           <div class="steps-picker">
             <p class="steps-picker-label">Steps to run</p>
             <div class="steps-grid">
-              <label class="step-option"><input type="checkbox" class="step-checkbox" value="qc" checked /> Quality Control</label>
-              <label class="step-option"><input type="checkbox" class="step-checkbox" value="proteines" checked /> Protein prediction</label>
-              <label class="step-option"><input type="checkbox" class="step-checkbox" value="ani" checked /> ANI</label>
-              <label class="step-option"><input type="checkbox" class="step-checkbox" value="aai" checked /> AAI</label>
-              <label class="step-option"><input type="checkbox" class="step-checkbox" value="pocp" checked /> POCP</label>
-              <label class="step-option"><input type="checkbox" class="step-checkbox" value="arbre" checked /> Phylogenomic tree</label>
-              <label class="step-option"><input type="checkbox" class="step-checkbox" value="figures" checked /> Figures</label>
+              <label class="step-option"><input type="checkbox" class="step-checkbox" value="qc" checked /><span>Quality Control (size, GC%, contigs)</span></label>
+              <label class="step-option" title="Needs several GB of RAM and can take a few minutes"><input type="checkbox" class="step-checkbox" value="checkm2" checked /><span>CheckM2 (completeness/contamination)</span></label>
+              <label class="step-option"><input type="checkbox" class="step-checkbox" value="proteines" checked /><span>Protein prediction</span></label>
+              <label class="step-option"><input type="checkbox" class="step-checkbox" value="ani" checked /><span>ANI</span></label>
+              <label class="step-option"><input type="checkbox" class="step-checkbox" value="dddh" checked /><span>dDDH</span></label>
+              <label class="step-option"><input type="checkbox" class="step-checkbox" value="aai" checked /><span>AAI</span></label>
+              <label class="step-option"><input type="checkbox" class="step-checkbox" value="pocp" checked /><span>POCP</span></label>
+              <label class="step-option"><input type="checkbox" class="step-checkbox" value="arbre" checked /><span>Phylogenomic tree</span></label>
+              <label class="step-option"><input type="checkbox" class="step-checkbox" value="figures" checked /><span>Figures</span></label>
             </div>
           </div>
 
@@ -210,6 +284,9 @@
             <summary>Show run log</summary>
             <pre id="logBox" class="log-box"></pre>
           </details>
+          <div class="progress-actions">
+            <button id="cancelBtn" class="btn btn-secondary">Cancel</button>
+          </div>
         </div>
       </div>
     </section>
@@ -222,6 +299,7 @@
         <div class="tabs">
           <button class="tab-btn active" data-tab="tab-qc">Quality Control</button>
           <button class="tab-btn" data-tab="tab-ani">ANI</button>
+          <button class="tab-btn" data-tab="tab-dddh">dDDH</button>
           <button class="tab-btn" data-tab="tab-aai">AAI</button>
           <button class="tab-btn" data-tab="tab-pocp">POCP</button>
           <button class="tab-btn" data-tab="tab-tree">Phylogenomic Tree</button>
@@ -244,6 +322,15 @@
           </div>
           <p class="panel-note">Species threshold &mdash; genomes above ~95% ANI belong to the same species.</p>
           <img id="img-ani" class="heatmap" alt="ANI heatmap" />
+        </div>
+
+        <div id="tab-dddh" class="tab-panel">
+          <div class="panel-head">
+            <h3>digital DNA-DNA Hybridization (dDDH)</h3>
+            <a id="dl-dddh" class="btn btn-ghost" download>Download dddh_distance.tsv</a>
+          </div>
+          <p class="panel-note">Species threshold &mdash; genomes with a distance above 0.0412 (analogous to &lt;70% DDH) are distinct species. Independent nucleotide-alignment method (BLASTN, GBDP formula 2), computed separately from ANI &mdash; not derived from it.</p>
+          <img id="img-dddh" class="heatmap" alt="dDDH heatmap" />
         </div>
 
         <div id="tab-aai" class="tab-panel">
@@ -284,7 +371,7 @@
 
   <footer class="footer">
     <div class="container">
-      Genome Taxonomy Explorer &mdash; runs entirely on your local machine.
+      Taxo Genomics Analyses ; 
     </div>
   </footer>
 
