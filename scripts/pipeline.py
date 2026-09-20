@@ -133,6 +133,11 @@ def etape_pocp():
 
 def etape_arbre():
     print(">>> Etape : arbre phylogenomique (EasyCGTree, Perl)")
+    if not os.path.exists(EASYCG + "/EasyCGTree.pl"):
+        print("    !! ATTENTION : EasyCGTree4 introuvable dans", EASYCG)
+        print("    !! Cet outil ne s'installe pas via conda, il faut l'installer manuellement")
+        print("    !! (voir la section Installation du README).")
+        return
     entree = EASYCG + "/input_genomes"
     os.makedirs(entree, exist_ok=True)
     for g in glob.glob(GENOMES + "/*.fas"):
