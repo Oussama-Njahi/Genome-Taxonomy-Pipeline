@@ -4,7 +4,7 @@ import glob
 import os
 import shutil
 
-BASE     = "/home/oussama/stage"
+BASE     = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GENOMES  = BASE + "/genomes"
 PROTEINS = BASE + "/proteins"
 RESULTS  = BASE + "/results"
