@@ -122,7 +122,7 @@ def etape_arbre():
 
 def etape_figures():
     print(">>> Etape 7 : figures (R : ggplot2 + ggtree)")
-    subprocess.run(["Rscript", SCRIPTS + "/plot_all.R"])
+    subprocess.run(["Rscript", SCRIPTS + "/plot_all.R", RESULTS])
     print("    -> figures PNG creees dans results")
 
 
