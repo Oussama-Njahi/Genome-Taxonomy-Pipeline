@@ -45,17 +45,24 @@ theme_vintage <- theme_minimal(base_size = 11, base_family = "serif") +
 clean <- function(x) gsub("\\.(fas|fasta|fna)$", "", gsub(".*/", "", x))
 
 # fonction generique : dessine une heatmap "planche scientifique d'epoque"
-heatmap_fig <- function(data, valcol, titre, sous, legende, fichier) {
+# reverse = TRUE pour une DISTANCE (valeur BASSE = genomes PROCHES, donc
+# affichee du cote sombre de l'echelle) au lieu d'un pourcentage de
+# similarite (valeur HAUTE = genomes proches, comme ANI/AAI/POCP).
+heatmap_fig <- function(data, valcol, titre, sous, legende, fichier, decimales = 1, reverse = FALSE) {
   rng <- range(data[[valcol]], na.rm = TRUE)
   mid <- mean(rng)
-  data$label_col <- ifelse(data[[valcol]] > mid, BG_PAPER, INK_DARK)
+  est_sombre <- if (reverse) data[[valcol]] < mid else data[[valcol]] > mid
+  data$label_col <- ifelse(est_sombre, BG_PAPER, INK_DARK)
+
+  couleurs <- c(BG_PAPER, "#c9a876", "#8b5a2b", INK_DARK)
+  if (reverse) couleurs <- rev(couleurs)
 
   p <- ggplot(data, aes(GenomeA, GenomeB, fill = .data[[valcol]])) +
     geom_tile(color = GRID_LINE, linewidth = 0.6) +
-    geom_text(aes(label = round(.data[[valcol]], 1), color = label_col), size = 2.1,
+    geom_text(aes(label = round(.data[[valcol]], decimales), color = label_col), size = 2.1,
               family = "serif", fontface = "bold") +
     scale_color_identity() +
-    scale_fill_gradientn(colors = c(BG_PAPER, "#c9a876", "#8b5a2b", INK_DARK), name = legende) +
+    scale_fill_gradientn(colors = couleurs, name = legende) +
     coord_fixed() +
     labs(title = titre, subtitle = sous, x = NULL, y = NULL,
          caption = "Genome Taxonomy Explorer  —  Local Analysis") +
@@ -77,14 +84,25 @@ d <- raw[, c(3, 4, 5)]; colnames(d) <- c("GenomeA", "GenomeB", "AAI")
 heatmap_fig(d, "AAI", "Average Amino acid Identity (AAI)",
             "Approximate genus boundary around 65%", "AAI (%)", file.path(RES, "heatmap_aai.png"))
 
-# ---------- 3) POCP ----------
+# ---------- 3) dDDH (distance GBDP, formule 2) ----------
+# On affiche la DISTANCE (0 = identique), pas le %similarite estime :
+# ce dernier n'est fiable que pres du seuil espece et devient absurde
+# (parfois negatif) pour des genomes deja tres divergents -- voir dddh.py.
+mat <- read.table(file.path(RES, "dddh_out/dddh_distance.tsv"), sep = "\t",
+                  header = TRUE, row.names = 1, check.names = FALSE)
+d <- melt(as.matrix(mat)); colnames(d) <- c("GenomeA", "GenomeB", "dDDH")
+heatmap_fig(d, "dDDH", "digital DNA-DNA Hybridization (dDDH, formule GBDP 2)",
+            "Species threshold: distance > 0.0412 (~<70% DDH) = distinct species",
+            "dDDH distance", file.path(RES, "heatmap_dddh.png"), decimales = 3, reverse = TRUE)
+
+# ---------- 4) POCP ----------
 mat <- read.table(file.path(RES, "pocp_out/pocp_matrice.tsv"), sep = "\t",
                   header = TRUE, row.names = 1, check.names = FALSE)
 d <- melt(as.matrix(mat)); colnames(d) <- c("GenomeA", "GenomeB", "POCP")
 heatmap_fig(d, "POCP", "Percentage of Conserved Proteins (POCP)",
             "Genus threshold = 50%", "POCP (%)", file.path(RES, "heatmap_pocp.png"))
 
-# ---------- 4) TREE (colored by genus) ----------
+# ---------- 5) TREE (colored by genus) ----------
 tree <- read.tree(file.path(RES, "arbre.tree"))
 genus <- sub("-.*", "", tree$tip.label)   # le genre = 1er mot du nom
 dd <- data.frame(label = tree$tip.label, Genus = genus)
