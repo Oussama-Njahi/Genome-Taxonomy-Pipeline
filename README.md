@@ -63,14 +63,29 @@ python scripts/pipeline.py
 
 Results (quality report, ANI/AAI/POCP matrices, tree, figures) are written to `results/`.
 
+## Web interface
+
+A local web UI wraps the same 7-step pipeline behind an upload form, so genomes can be dropped in a browser instead of the command line:
+
+```bash
+cd webapp/backend
+uvicorn app:app --reload
+```
+
+Then open `http://127.0.0.1:8000`. Upload at least 5 genome assemblies (`.fas`, `.fasta`, `.fna`), pick which steps to run, and the results (quality report, ANI/AAI/POCP matrices, tree, heatmaps) become viewable and downloadable once the job finishes.
+
 ## Project structure
 
 ```
 .
 ├── scripts/
 │   ├── pipeline.py       # main orchestrator (7 steps)
+│   ├── pipeline_web.py   # same pipeline, parameterized for the web interface
 │   ├── pocp.py           # POCP calculation (DIAMOND-based)
 │   └── plot_all.R        # figure generation (ggplot2 + ggtree)
+├── webapp/
+│   ├── backend/          # FastAPI server (app.py, job_manager.py)
+│   └── frontend/         # upload form + results UI (HTML/CSS/JS, no build step)
 ├── stage_environment.yml # reproducible conda environment
 └── README.md
 ```
@@ -81,7 +96,6 @@ Results (quality report, ANI/AAI/POCP matrices, tree, figures) are written to `r
 
 - [ ] 16S-based taxonomic identification module (barrnap + reference database)
 - [ ] Cross-validation with alternative tools (pyANI-plus, IQ-TREE)
-- [ ] Local web interface for interactive analysis (in progress, separate module)
 - [ ] Public deployment (Docker + systemd)
 
 ## References

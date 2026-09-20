@@ -21,6 +21,9 @@ dependencies:
   - openpyxl
   - biopython
   - streamlit
+  - fastapi
+  - uvicorn
+  - python-multipart
   - r-base>=4.2
   - r-ggplot2
   - r-pheatmap
