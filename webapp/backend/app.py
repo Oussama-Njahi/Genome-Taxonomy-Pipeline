@@ -24,10 +24,12 @@ manager = JobManager(JOBS_DIR)
 RESULT_FILES = {
     "qc": ("results/qc.txt", "text/plain"),
     "ani": ("results/ani_resultats.txt", "text/plain"),
+    "dddh": ("results/dddh_out/dddh_distance.tsv", "text/tab-separated-values"),
     "aai": ("results/aai_resultats.tsv", "text/tab-separated-values"),
     "pocp": ("results/pocp_out/pocp_matrice.tsv", "text/tab-separated-values"),
     "tree_newick": ("results/arbre.tree", "text/plain"),
     "heatmap_ani": ("results/heatmap_ani.png", "image/png"),
+    "heatmap_dddh": ("results/heatmap_dddh.png", "image/png"),
     "heatmap_aai": ("results/heatmap_aai.png", "image/png"),
     "heatmap_pocp": ("results/heatmap_pocp.png", "image/png"),
     "tree_png": ("results/tree.png", "image/png"),
@@ -78,6 +80,16 @@ async def create_job(files: List[UploadFile] = File(...), steps: str = Form("all
 
     manager.submit(job_id, job_dir, len(files), steps)
     return {"job_id": job_id}
+
+
+@app.post("/api/jobs/{job_id}/cancel")
+async def cancel_job(job_id: str):
+    state = manager.status(job_id)
+    if state is None:
+        raise HTTPException(404, "Unknown job id")
+    if not manager.cancel(job_id):
+        raise HTTPException(409, "Job already finished, nothing to cancel")
+    return {"status": "cancelling"}
 
 
 @app.get("/api/jobs/{job_id}/status")
