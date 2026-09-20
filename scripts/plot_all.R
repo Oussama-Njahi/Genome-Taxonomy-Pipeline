@@ -4,7 +4,11 @@ suppressMessages({
   library(ape); library(viridisLite)
 })
 
-RES <- "/home/oussama/stage/results"
+args <- commandArgs(trailingOnly = TRUE)
+if (length(args) < 1) {
+  stop("Usage: Rscript plot_all.R <results_dir>")
+}
+RES <- args[1]
 
 # thème moderne commun a toutes les heatmaps
 theme_modern <- theme_minimal(base_size = 11) +
