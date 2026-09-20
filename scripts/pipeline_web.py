@@ -210,6 +210,9 @@ def etape_pocp(proteins_dir, results_dir):
 
 def etape_arbre(fichiers, results_dir, job_id, threads):
     announce(8)
+    if not os.path.exists(EASYCG + "/EasyCGTree.pl"):
+        fail("EasyCGTree4 not found at %s - it must be installed manually "
+             "(not available via conda), see the README's Installation section" % EASYCG)
     input_name = "job_" + job_id
     entree = EASYCG + "/" + input_name
     os.makedirs(entree, exist_ok=True)
