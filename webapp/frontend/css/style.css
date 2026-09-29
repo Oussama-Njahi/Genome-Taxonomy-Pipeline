@@ -136,7 +136,7 @@ code {
   position: relative;
   z-index: 2;
   text-align: left;
-  padding: 32px 0;
+  padding-block: 32px;
 }
 
 .hero-text { max-width: 560px; }
