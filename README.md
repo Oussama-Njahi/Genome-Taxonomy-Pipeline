@@ -78,6 +78,15 @@ uvicorn app:app --reload
 
 Then open `http://127.0.0.1:8000`. Upload at least 5 genome assemblies (`.fas`, `.fasta`, `.fna`), pick which steps to run via checkboxes, and the results (quality report, ANI/dDDH/AAI/POCP matrices, tree, heatmaps) become viewable and downloadable once the job finishes. A running job can be cancelled from the UI at any time.
 
+## Pipeline overview
+
+<p align="center">
+  <img
+    src="tga-pipeline-flowchart.png"
+    alt="Genome Taxonomy Pipeline overview"
+    width="100%"
+  >
+</p>
 ## Project structure
 
 ```
