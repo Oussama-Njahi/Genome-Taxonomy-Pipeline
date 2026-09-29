@@ -89,12 +89,11 @@ code {
 
 .brand-mark {
   display: inline-flex;
-  flex-direction: column;
   align-items: center;
-  gap: 3px;
+  gap: 12px;
 }
 
-.brand-mark svg { width: 58px; height: auto; display: block; }
+.brand-mark svg { width: 46px; height: auto; display: block; }
 
 .brand-shield {
   fill: var(--primary-light);
@@ -104,19 +103,17 @@ code {
 }
 .brand-shield-inner { fill: none; stroke: var(--brass); stroke-width: 1.6; opacity: 0.85; }
 .brand-fleuron { fill: var(--brass); }
-.brand-helix { fill: none; stroke: var(--primary); stroke-width: 1.5; opacity: 0.5; }
-.brand-tree { fill: none; stroke: var(--primary); stroke-width: 2.8; stroke-linecap: round; stroke-linejoin: round; }
-.brand-microbe { fill: var(--primary); stroke: none; }
-.brand-microbe-ring { fill: none; stroke: var(--brass); stroke-width: 1.2; }
+.brand-rungs { stroke: var(--brass); stroke-width: 3.5; stroke-linecap: round; opacity: 0.85; }
+.brand-strand { fill: none; stroke: var(--primary); stroke-width: 7; stroke-linecap: round; }
+.brand-strand-back { stroke: var(--brass-dark); stroke-width: 6; }
 
 .brand-abbr {
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 13px;
-  letter-spacing: 0.32em;
+  font-size: 24px;
+  letter-spacing: 0.2em;
   color: var(--primary);
   line-height: 1;
-  padding-left: 0.32em;
 }
 
 .topnav { display: flex; gap: 28px; flex-shrink: 0; }
@@ -226,18 +223,23 @@ code {
   margin: 0 auto 10px;
 }
 
+/* Dotted connectors between the step circles: a row of round brass dots,
+   anchored at the circle's edge so the spacing looks even on both sides. */
 .workflow-node-wrap::before,
 .workflow-node-wrap::after {
   content: "";
   position: absolute;
   top: 50%;
-  height: 1px;
+  height: 4px;
   width: 1000px;
-  background: var(--brass);
-  opacity: 0.5;
+  margin-top: -2px;
+  background-image: radial-gradient(circle, var(--brass) 1.3px, transparent 1.8px);
+  background-size: 9px 4px;
+  background-repeat: repeat-x;
+  opacity: 0.85;
 }
-.workflow-node-wrap::before { right: 100%; }
-.workflow-node-wrap::after { left: 100%; }
+.workflow-node-wrap::before { right: 100%; background-position: right 3px center; }
+.workflow-node-wrap::after { left: 100%; background-position: left 3px center; }
 .workflow-step:first-child .workflow-node-wrap::before,
 .workflow-step:last-child .workflow-node-wrap::after { display: none; }
 
@@ -317,6 +319,7 @@ code {
 }
 .btn-primary:disabled { background: #c2b59a; border-color: transparent; box-shadow: none; cursor: not-allowed; }
 .btn-large { padding: 14px 28px; font-size: 16px; }
+.btn-icon { width: 20px; height: 20px; flex-shrink: 0; }
 
 .btn-secondary { background: var(--primary-light); color: var(--primary-dark); border: 1px solid transparent; }
 .btn-secondary:hover { background: var(--indigo-light); color: var(--indigo-dark); }
@@ -332,7 +335,8 @@ code {
 .btn-ghost:hover { background: var(--indigo-light); color: var(--indigo-dark); border-color: var(--indigo); }
 
 /* ---------- Analyze section ---------- */
-.analyze { padding: 24px 0 80px; }
+.analyze { position: relative; padding: 24px 0 80px; }
+.analyze > .container { position: relative; z-index: 1; }
 
 .analyze h2, .results h2, .workflow-head h2 {
   font-size: 32px;
@@ -363,30 +367,30 @@ code {
 
 
 .dropzone {
-    border: 2px dashed var(--border);
-  border-radius: var(--radius);
-  padding: 48px 20px;
+  border: 1.5px dashed rgba(169, 121, 63, 0.7);
+  border-radius: 10px;
+  padding: 40px 20px 36px;
   text-align: center;
   cursor: pointer;
+  background: rgba(247, 241, 224, 0.55);
   transition: border-color 0.15s ease, background 0.15s ease;
 }
 
 .dropzone:hover, .dropzone.dragover {
   border-color: var(--primary);
-  background: rgba(243, 230, 196, 0.45);
+  background: rgba(243, 230, 196, 0.6);
 }
 
 .dropzone-icon {
-  width: 48px; height: 48px;
-  margin: 0 auto 14px;
-  border-radius: 50%;
-  background: var(--primary-light);
-  color: var(--primary);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 22px; font-weight: 700;
+  display: block;
+  width: 52px; height: 52px;
+  margin: 0 auto 12px;
+  color: var(--brass-dark);
+  transition: color 0.15s ease, transform 0.15s ease;
 }
+.dropzone:hover .dropzone-icon, .dropzone.dragover .dropzone-icon { color: var(--primary); transform: translateY(-2px); }
 
-.dropzone-title { font-weight: 700; margin: 0 0 4px; font-size: 18px; color: var(--primary); }
+.dropzone-title { font-weight: 700; margin: 0 0 4px; font-size: 17px; color: var(--primary); }
 .dropzone-sub { color: var(--text-muted); margin: 0; font-size: 13.5px; }
 
 .file-list {
@@ -680,7 +684,41 @@ input:focus-visible,
 .book-corner-bl { bottom: -11px; left: -11px; }
 .book-corner-br { bottom: -11px; right: -11px; }
 
+/* ---------- Decorative engravings (purely ornamental, never interactive) ---------- */
+.deco {
+  position: absolute;
+  z-index: 0;
+  pointer-events: none;
+  color: var(--brass-dark);
+  opacity: 0.5;
+}
+.deco .deco-accent { stroke: var(--primary); }
+.deco-atom {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 700;
+  font-size: 9px;
+  fill: currentColor;
+  stroke: none;
+  text-anchor: middle;
+}
+
+/* Hero: sits in the empty right half, beside the intro text */
+.deco-microscope { right: 56px; top: 50%; width: 190px; transform: translateY(-50%); opacity: 0.6; }
+
+/* Analyze section: tucked into the side margins, outside the 1080px column */
+.deco-molecule { top: 12px; right: max(16px, calc(50% - 540px - 170px)); width: 150px; }
+.deco-petri { bottom: 90px; left: max(16px, calc(50% - 540px - 170px)); width: 150px; }
+
 /* ---------- Responsive ---------- */
+@media (max-width: 1400px) {
+  .deco-molecule, .deco-petri { display: none; }
+}
+
+@media (max-width: 900px) {
+  .deco-microscope { display: none; }
+}
+
 @media (max-width: 1100px) {
   .workflow { grid-template-columns: repeat(3, 1fr); }
   .workflow-node-wrap::before, .workflow-node-wrap::after { display: none; }
@@ -695,6 +733,11 @@ input:focus-visible,
   .panel-head { flex-direction: column; align-items: flex-start; }
   .book-frame { inset: 4px; }
   body::before, body::after { width: 12px; }
+  .brand-mark { gap: 8px; }
+  .brand-mark svg { width: 34px; }
+  .brand-abbr { font-size: 19px; letter-spacing: 0.14em; }
+  .topnav { gap: 18px; }
+  .topnav a { font-size: 14.5px; }
 }
 
 @media (max-width: 480px) {
