@@ -71,50 +71,82 @@ heatmap_fig <- function(data, valcol, titre, sous, legende, fichier, decimales =
   cat("  ->", fichier, "\n")
 }
 
+# Chaque etape du pipeline est optionnelle : on ne dessine une figure que si
+# l'etape qui produit son fichier d'entree a tourne, sinon on la saute
+# (au lieu de faire echouer toute l'etape Figures sur un fichier absent).
+n_figures <- 0
+present <- function(chemin, figure) {
+  if (file.exists(chemin)) return(TRUE)
+  cat("  -- skipped", figure, "(", basename(chemin), "not found: step not run )\n")
+  FALSE
+}
+
 # ---------- 1) ANI ----------
-d <- read.table(file.path(RES, "ani_resultats.txt"), sep = "\t", header = FALSE)[, 1:3]
-colnames(d) <- c("GenomeA", "GenomeB", "ANI")
-d$GenomeA <- clean(d$GenomeA); d$GenomeB <- clean(d$GenomeB)
-heatmap_fig(d, "ANI", "Average Nucleotide Identity (ANI)",
-            "Species threshold = 95%", "ANI (%)", file.path(RES, "heatmap_ani.png"))
+f <- file.path(RES, "ani_resultats.txt")
+if (present(f, "ANI heatmap")) {
+  d <- read.table(f, sep = "\t", header = FALSE)[, 1:3]
+  colnames(d) <- c("GenomeA", "GenomeB", "ANI")
+  d$GenomeA <- clean(d$GenomeA); d$GenomeB <- clean(d$GenomeB)
+  heatmap_fig(d, "ANI", "Average Nucleotide Identity (ANI)",
+              "Species threshold = 95%", "ANI (%)", file.path(RES, "heatmap_ani.png"))
+  n_figures <- n_figures + 1
+}
 
 # ---------- 2) AAI ----------
-raw <- read.table(file.path(RES, "aai_resultats.tsv"), sep = "\t", header = TRUE, check.names = FALSE)
-d <- raw[, c(3, 4, 5)]; colnames(d) <- c("GenomeA", "GenomeB", "AAI")
-heatmap_fig(d, "AAI", "Average Amino acid Identity (AAI)",
-            "Approximate genus boundary around 65%", "AAI (%)", file.path(RES, "heatmap_aai.png"))
+f <- file.path(RES, "aai_resultats.tsv")
+if (present(f, "AAI heatmap")) {
+  raw <- read.table(f, sep = "\t", header = TRUE, check.names = FALSE)
+  d <- raw[, c(3, 4, 5)]; colnames(d) <- c("GenomeA", "GenomeB", "AAI")
+  heatmap_fig(d, "AAI", "Average Amino acid Identity (AAI)",
+              "Approximate genus boundary around 65%", "AAI (%)", file.path(RES, "heatmap_aai.png"))
+  n_figures <- n_figures + 1
+}
 
 # ---------- 3) dDDH (distance GBDP, formule 2) ----------
 # On affiche la DISTANCE (0 = identique), pas le %similarite estime :
 # ce dernier n'est fiable que pres du seuil espece et devient absurde
 # (parfois negatif) pour des genomes deja tres divergents -- voir dddh.py.
-mat <- read.table(file.path(RES, "dddh_out/dddh_distance.tsv"), sep = "\t",
-                  header = TRUE, row.names = 1, check.names = FALSE)
-d <- melt(as.matrix(mat)); colnames(d) <- c("GenomeA", "GenomeB", "dDDH")
-heatmap_fig(d, "dDDH", "digital DNA-DNA Hybridization (dDDH, formule GBDP 2)",
-            "Species threshold: distance > 0.0412 (~<70% DDH) = distinct species",
-            "dDDH distance", file.path(RES, "heatmap_dddh.png"), decimales = 3, reverse = TRUE)
+f <- file.path(RES, "dddh_out/dddh_distance.tsv")
+if (present(f, "dDDH heatmap")) {
+  mat <- read.table(f, sep = "\t", header = TRUE, row.names = 1, check.names = FALSE)
+  d <- melt(as.matrix(mat)); colnames(d) <- c("GenomeA", "GenomeB", "dDDH")
+  heatmap_fig(d, "dDDH", "digital DNA-DNA Hybridization (dDDH, formule GBDP 2)",
+              "Species threshold: distance > 0.0412 (~<70% DDH) = distinct species",
+              "dDDH distance", file.path(RES, "heatmap_dddh.png"), decimales = 3, reverse = TRUE)
+  n_figures <- n_figures + 1
+}
 
 # ---------- 4) POCP ----------
-mat <- read.table(file.path(RES, "pocp_out/pocp_matrice.tsv"), sep = "\t",
-                  header = TRUE, row.names = 1, check.names = FALSE)
-d <- melt(as.matrix(mat)); colnames(d) <- c("GenomeA", "GenomeB", "POCP")
-heatmap_fig(d, "POCP", "Percentage of Conserved Proteins (POCP)",
-            "Genus threshold = 50%", "POCP (%)", file.path(RES, "heatmap_pocp.png"))
+f <- file.path(RES, "pocp_out/pocp_matrice.tsv")
+if (present(f, "POCP heatmap")) {
+  mat <- read.table(f, sep = "\t", header = TRUE, row.names = 1, check.names = FALSE)
+  d <- melt(as.matrix(mat)); colnames(d) <- c("GenomeA", "GenomeB", "POCP")
+  heatmap_fig(d, "POCP", "Percentage of Conserved Proteins (POCP)",
+              "Genus threshold = 50%", "POCP (%)", file.path(RES, "heatmap_pocp.png"))
+  n_figures <- n_figures + 1
+}
 
 # ---------- 5) TREE (colored by genus) ----------
-tree <- read.tree(file.path(RES, "arbre.tree"))
-genus <- sub("-.*", "", tree$tip.label)   # le genre = 1er mot du nom
-dd <- data.frame(label = tree$tip.label, Genus = genus)
-pt <- ggtree(tree) %<+% dd +
-  geom_tippoint(aes(color = Genus), size = 3) +
-  geom_tiplab(aes(color = Genus), size = 3, hjust = -0.05) +
-  scale_color_viridis_d(option = "D", end = 0.9) +
-  ggtitle("Phylogenomic tree (120 core genes, bac120)") +
-  xlim(0, 1.3) +
-  theme(legend.position = "right",
-        plot.title = element_text(face = "bold", size = 14))
-ggsave(file.path(RES, "tree.png"), pt, width = 12, height = 7.5, dpi = 300)
-cat("  -> tree.png\n")
+f <- file.path(RES, "arbre.tree")
+if (present(f, "tree figure")) {
+  tree <- read.tree(f)
+  genus <- sub("-.*", "", tree$tip.label)   # le genre = 1er mot du nom
+  dd <- data.frame(label = tree$tip.label, Genus = genus)
+  pt <- ggtree(tree) %<+% dd +
+    geom_tippoint(aes(color = Genus), size = 3) +
+    geom_tiplab(aes(color = Genus), size = 3, hjust = -0.05) +
+    scale_color_viridis_d(option = "D", end = 0.9) +
+    ggtitle("Phylogenomic tree (120 core genes, bac120)") +
+    xlim(0, 1.3) +
+    theme(legend.position = "right",
+          plot.title = element_text(face = "bold", size = 14))
+  ggsave(file.path(RES, "tree.png"), pt, width = 12, height = 7.5, dpi = 300)
+  cat("  -> tree.png\n")
+  n_figures <- n_figures + 1
+}
 
-cat("All figures generated.\n")
+if (n_figures == 0) {
+  cat("No figure generated: none of ANI, dDDH, AAI, POCP or the tree was run.\n")
+} else {
+  cat(n_figures, "figure(s) generated.\n")
+}
