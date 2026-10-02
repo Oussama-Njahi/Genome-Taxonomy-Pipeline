@@ -21,6 +21,7 @@ INK_DARK   <- "#2b1d0e"   # encre sepia fonce
 INK_MED    <- "#6b4a2a"   # encre sepia moyen
 GRID_LINE  <- "#b9a06f"   # liseret papier/encre clair
 ACCENT_RED <- "#7a2419"   # rouge bordeaux d'epoque (sous-titres/seuils)
+NA_FILL    <- "#d8d0bf"   # gris papier : case sans valeur (NA), hors de l'echelle
 
 theme_vintage <- theme_minimal(base_size = 11, base_family = "serif") +
   theme(plot.background    = element_rect(fill = BG_PAPER, color = INK_DARK, linewidth = 1.4),
@@ -52,17 +53,21 @@ heatmap_fig <- function(data, valcol, titre, sous, legende, fichier, decimales =
   rng <- range(data[[valcol]], na.rm = TRUE)
   mid <- mean(rng)
   est_sombre <- if (reverse) data[[valcol]] < mid else data[[valcol]] > mid
-  data$label_col <- ifelse(est_sombre, BG_PAPER, INK_DARK)
+  # Une valeur manquante (ex. paire dDDH sans alignement significatif) est
+  # affichee "NA" sur un fond neutre, jamais confondue avec une vraie valeur.
+  manquant <- is.na(data[[valcol]])
+  data$label_txt <- ifelse(manquant, "NA", as.character(round(data[[valcol]], decimales)))
+  data$label_col <- ifelse(manquant, INK_MED, ifelse(est_sombre, BG_PAPER, INK_DARK))
 
   couleurs <- c(BG_PAPER, "#c9a876", "#8b5a2b", INK_DARK)
   if (reverse) couleurs <- rev(couleurs)
 
   p <- ggplot(data, aes(GenomeA, GenomeB, fill = .data[[valcol]])) +
     geom_tile(color = GRID_LINE, linewidth = 0.6) +
-    geom_text(aes(label = round(.data[[valcol]], decimales), color = label_col), size = 2.1,
+    geom_text(aes(label = label_txt, color = label_col), size = 2.1,
               family = "serif", fontface = "bold") +
     scale_color_identity() +
-    scale_fill_gradientn(colors = couleurs, name = legende) +
+    scale_fill_gradientn(colors = couleurs, name = legende, na.value = NA_FILL) +
     coord_fixed() +
     labs(title = titre, subtitle = sous, x = NULL, y = NULL,
          caption = "Genome Taxonomy Explorer  —  Local Analysis") +
