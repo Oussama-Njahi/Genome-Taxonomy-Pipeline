@@ -1,6 +1,7 @@
-# plot_all_web.R - Parameterized version of plot_all.R for the web interface.
-# Same figures, same styling; only the results directory comes from argv[1]
-# instead of being hardcoded, so each web job renders into its own folder.
+# plot_all_web.R - Figures of the pipeline (heatmaps + tree), used both by the
+# web interface and the command line (pipeline.py runs pipeline_web.py).
+# The results directory comes from argv[1], so each web job renders into its
+# own folder.
 suppressMessages({
   library(ggplot2); library(reshape2); library(ggtree)
   library(ape); library(viridisLite)

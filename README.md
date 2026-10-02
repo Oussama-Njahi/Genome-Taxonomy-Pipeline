@@ -59,13 +59,13 @@ EasyCGTree4 is not distributed via conda and must be installed manually — see 
 
 ## Usage
 
-Place your genome assemblies (`.fas`) in `genomes/`, then run:
+Place your genome assemblies (`.fas`, `.fasta` or `.fna`, at least 5) in `genomes/`, then run:
 
 ```bash
 python scripts/pipeline.py
 ```
 
-Results (quality report, ANI/AAI/POCP matrices, tree, figures) are written to `results/`.
+Results (quality report, ANI/dDDH/AAI/POCP matrices, tree, figures) are written to `results/`, predicted proteins to `proteins/`. Options such as `--steps` and `--threads` work as described above.
 
 ## Web interface
 
@@ -92,11 +92,11 @@ Then open `http://127.0.0.1:8000`. Upload at least 5 genome assemblies (`.fas`, 
 ```
 .
 ├── scripts/
-│   ├── pipeline.py       # main orchestrator (9 steps)
-│   ├── pipeline_web.py   # same pipeline, parameterized for the web interface
+│   ├── pipeline.py       # command-line entry point: runs pipeline_web.py on genomes/
+│   ├── pipeline_web.py   # the 9-step pipeline (also used by the web interface)
 │   ├── pocp.py           # POCP calculation (DIAMOND-based)
 │   ├── dddh.py           # dDDH calculation (BLASTN-based, GBDP formula 2)
-│   └── plot_all.R        # figure generation (ggplot2 + ggtree)
+│   └── plot_all_web.R    # figure generation (ggplot2 + ggtree)
 ├── webapp/
 │   ├── backend/          # FastAPI server (app.py, job_manager.py)
 │   └── frontend/         # upload form + results UI (HTML/CSS/JS, no build step)
