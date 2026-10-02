@@ -233,6 +233,27 @@ function renderProgress(state) {
   logBox.scrollTop = logBox.scrollHeight;
 }
 
+// Every step is optional: a results tab is shown only if its step produced
+// its data file, and its figure only if the Figures step drew it.
+const RESULT_TABS = [
+  { tab: "tab-qc", data: "qc" },
+  { tab: "tab-ani", data: "ani", img: "img-ani", figure: "heatmap_ani" },
+  { tab: "tab-dddh", data: "dddh", img: "img-dddh", figure: "heatmap_dddh" },
+  { tab: "tab-aai", data: "aai", img: "img-aai", figure: "heatmap_aai" },
+  { tab: "tab-pocp", data: "pocp", img: "img-pocp", figure: "heatmap_pocp" },
+  { tab: "tab-tree", data: "tree_newick", img: "img-tree", figure: "tree_png" },
+];
+
+const DOWNLOAD_LINKS = {
+  "dl-qc": "qc",
+  "dl-ani": "ani",
+  "dl-dddh": "dddh",
+  "dl-aai": "aai",
+  "dl-pocp": "pocp",
+  "dl-tree-png": "tree_png",
+  "dl-tree-newick": "tree_newick",
+};
+
 async function loadResults(jobId) {
   const response = await fetch(`/api/jobs/${jobId}/results`);
   if (!response.ok) {
@@ -240,26 +261,49 @@ async function loadResults(jobId) {
     return;
   }
   const data = await response.json();
+  const files = data.files;
 
   renderQcTable(data.qc);
 
-  document.getElementById("img-ani").src = data.files.heatmap_ani;
-  document.getElementById("img-dddh").src = data.files.heatmap_dddh;
-  document.getElementById("img-aai").src = data.files.heatmap_aai;
-  document.getElementById("img-pocp").src = data.files.heatmap_pocp;
-  document.getElementById("img-tree").src = data.files.tree_png;
+  Object.entries(DOWNLOAD_LINKS).forEach(([id, key]) => {
+    const link = document.getElementById(id);
+    link.classList.toggle("hidden", !files[key]);
+    if (files[key]) link.href = files[key];
+    else link.removeAttribute("href");
+  });
 
-  document.getElementById("dl-qc").href = data.files.qc;
-  document.getElementById("dl-ani").href = data.files.ani;
-  document.getElementById("dl-dddh").href = data.files.dddh;
-  document.getElementById("dl-aai").href = data.files.aai;
-  document.getElementById("dl-pocp").href = data.files.pocp;
-  document.getElementById("dl-tree-png").href = data.files.tree_png;
-  document.getElementById("dl-tree-newick").href = data.files.tree_newick;
+  let firstTab = null;
+  RESULT_TABS.forEach(({ tab, data: key, img, figure }) => {
+    const ran = Boolean(files[key]);
+    document.querySelector(`.tab-btn[data-tab="${tab}"]`).classList.toggle("hidden", !ran);
+    if (ran && !firstTab) firstTab = tab;
+    if (img) showFigure(img, ran ? files[figure] : null);
+  });
 
   progressCard.classList.add("hidden");
+  if (!firstTab) {
+    showMessage("Analysis finished. The selected steps produce no table or figure to display here.", "info");
+    return;
+  }
+  activateTab(firstTab);
   resultsSection.classList.remove("hidden");
   resultsSection.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function showFigure(imgId, url) {
+  const img = document.getElementById(imgId);
+  let note = img.nextElementSibling;
+  if (!note || !note.classList.contains("figure-missing")) {
+    note = document.createElement("p");
+    note.className = "panel-note figure-missing";
+    note.textContent =
+      "No figure for this run: the Figures step was not selected. The raw results can be downloaded above.";
+    img.after(note);
+  }
+  img.classList.toggle("hidden", !url);
+  note.classList.toggle("hidden", Boolean(url));
+  if (url) img.src = url;
+  else img.removeAttribute("src");
 }
 
 function renderQcTable(rows) {
@@ -305,13 +349,13 @@ function renderQcTable(rows) {
 }
 
 // Tabs
+function activateTab(tabId) {
+  document.querySelectorAll(".tab-btn").forEach((b) => b.classList.toggle("active", b.dataset.tab === tabId));
+  document.querySelectorAll(".tab-panel").forEach((p) => p.classList.toggle("active", p.id === tabId));
+}
+
 document.querySelectorAll(".tab-btn").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    document.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
-    document.querySelectorAll(".tab-panel").forEach((p) => p.classList.remove("active"));
-    btn.classList.add("active");
-    document.getElementById(btn.dataset.tab).classList.add("active");
-  });
+  btn.addEventListener("click", () => activateTab(btn.dataset.tab));
 });
 
 function resetToUpload() {

@@ -109,18 +109,27 @@ async def job_results(job_id: str):
         raise HTTPException(409, "Job is not finished yet")
 
     job_dir = job_dir_or_404(job_id)
+    # Every step is optional: qc.txt only exists if Quality Control ran, and
+    # only the files the selected steps actually produced are listed, so the
+    # frontend can hide the tabs of the steps that were not run.
     qc_rows = []
     qc_path = job_dir / "results" / "qc.txt"
-    with open(qc_path) as fh:
-        header = fh.readline().rstrip("\n").split("\t")
-        for line in fh:
-            values = line.rstrip("\n").split("\t")
-            qc_rows.append(dict(zip(header, values)))
+    if qc_path.exists():
+        with open(qc_path) as fh:
+            header = fh.readline().rstrip("\n").split("\t")
+            for line in fh:
+                values = line.rstrip("\n").split("\t")
+                qc_rows.append(dict(zip(header, values)))
 
+    produced = {
+        key: f"/api/jobs/{job_id}/files/{key}"
+        for key, (relative_path, _) in RESULT_FILES.items()
+        if (job_dir / relative_path).exists()
+    }
     return {
         "qc": qc_rows,
         "n_genomes": state.get("n_genomes"),
-        "files": {key: f"/api/jobs/{job_id}/files/{key}" for key in RESULT_FILES},
+        "files": produced,
     }
 
 
