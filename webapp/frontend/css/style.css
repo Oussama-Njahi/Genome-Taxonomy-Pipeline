@@ -703,9 +703,6 @@ input:focus-visible,
   text-anchor: middle;
 }
 
-/* Hero: sits in the empty right half, beside the intro text */
-.deco-microscope { right: 56px; top: 50%; width: 190px; transform: translateY(-50%); opacity: 0.6; }
-
 /* Analyze section: tucked into the side margins, outside the 1080px column */
 .deco-molecule { top: 12px; right: max(16px, calc(50% - 540px - 170px)); width: 150px; }
 .deco-petri { bottom: 90px; left: max(16px, calc(50% - 540px - 170px)); width: 150px; }
@@ -713,10 +710,6 @@ input:focus-visible,
 /* ---------- Responsive ---------- */
 @media (max-width: 1400px) {
   .deco-molecule, .deco-petri { display: none; }
-}
-
-@media (max-width: 900px) {
-  .deco-microscope { display: none; }
 }
 
 @media (max-width: 1100px) {
