@@ -27,6 +27,7 @@ dependencies:
   - python-multipart
   - r-base>=4.2
   - r-ggplot2
+  - r-reshape2
   - r-pheatmap
   - r-ape
   - bioconductor-ggtree
