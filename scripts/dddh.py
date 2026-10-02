@@ -160,14 +160,20 @@ def dddh_paire(a, b):
 
 
 # ----- 3) Calculer le dDDH pour toutes les paires -----
-matrix_d = {a: {b: 0.0 for b in names} for a in names}          # diagonale = 0 (identique)
-matrix_s = {a: {b: 100.0 for b in names} for a in names}        # diagonale = 100 %
+# Seule la diagonale est remplie d'avance (un genome est identique a lui-meme).
+# Les autres cases restent vides (None, ecrit "NA") tant qu'aucune valeur n'est
+# calculee : une paire sans alignement significatif ne doit jamais apparaitre
+# comme identique (distance 0 / 100 %).
+matrix_d = {a: {b: (0.0 if a == b else None) for b in names} for a in names}
+matrix_s = {a: {b: (100.0 if a == b else None) for b in names} for a in names}
 pairs = list(itertools.combinations(names, 2))
+paires_sans_alignement = []
 for i, (a, b) in enumerate(pairs, 1):
     print("  paire %d/%d : %s  vs  %s" % (i, len(pairs), a, b))
     resultat = dddh_paire(a, b)
     if resultat is None:
-        print("    !! aucun alignement significatif trouve, paire ignoree")
+        print("    !! aucun alignement significatif trouve : valeur NA pour cette paire")
+        paires_sans_alignement.append((a, b))
         continue
     d, s = resultat
     matrix_d[a][b] = matrix_d[b][a] = round(d, 4)
@@ -181,9 +187,13 @@ for out_matrix, matrix in ((out_matrix_d, matrix_d), (out_matrix_s, matrix_s)):
         w = csv.writer(fh, delimiter="\t")
         w.writerow([""] + names)
         for a in names:
-            w.writerow([a] + [matrix[a][b] for b in names])
+            w.writerow([a] + ["NA" if matrix[a][b] is None else matrix[a][b] for b in names])
 
 print("\nTERMINE.")
+if paires_sans_alignement:
+    print("  !! %d paire(s) sans alignement significatif, notee(s) NA :" % len(paires_sans_alignement))
+    for a, b in paires_sans_alignement:
+        print("     %s  vs  %s" % (a, b))
 print("  -> distance GBDP (formule 2)     :", out_matrix_d)
 print("  -> similarite estimee (~%%dDDH)   :", out_matrix_s)
 print("  Seuil espece : d > %.4f (similarite < ~70%%) => especes differentes" % SEUIL_ESPECE)
