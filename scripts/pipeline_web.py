@@ -40,9 +40,16 @@ BASE = os.path.dirname(SCRIPTS)
 EASYCG = BASE + "/EasyCGTree4/EasyCGTree.v4.2-Linux"
 
 
+# Etapes choisies avec --steps, remplie par main() : la progression est
+# numerotee parmi elles (un run "ani,dddh" affiche 1/2 puis 2/2, pas 4/9)
+SELECTION = list(STEPS_KEYS)
+
+
 def announce(step_index, extra=""):
     label = STEPS[step_index - 1]
-    print("PROGRESS %d/%d %s%s" % (step_index, len(STEPS), label, (" - " + extra) if extra else ""))
+    key = STEPS_KEYS[step_index - 1]
+    position = SELECTION.index(key) + 1 if key in SELECTION else step_index
+    print("PROGRESS %d/%d %s%s" % (position, len(SELECTION), label, (" - " + extra) if extra else ""))
     sys.stdout.flush()
 
 
@@ -259,6 +266,8 @@ def main():
     args = parser.parse_args()
 
     selection = etapes_demandees(args.steps)
+    # dans l'ordre d'execution, pour que la progression suive les etapes lancees
+    SELECTION[:] = [k for k in STEPS_KEYS if k in selection]
 
     job_id = args.job_id or uuid.uuid4().hex[:12]
     genomes_dir = os.path.abspath(args.genomes_dir)
