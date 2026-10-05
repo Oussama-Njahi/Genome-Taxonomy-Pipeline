@@ -35,6 +35,24 @@ detail base-par-base de l'alignement, seulement au %identite global de
 chaque HSP). C'est une approximation raisonnable et couramment admise,
 mais ce n'est pas un reimplementation bit-a-bit du code interne de GGDC.
 
+Version de la methode : ce script applique la methode d'Auch et al. (2010),
+Table 4, ligne "NCBI BLAST / Trimming (2)" : formule (2), algorithme
+greedy-with-trimming, conversion LINEAIRE (90.3998 - 438.3134 * d) et seuil
+0.0412. Depuis sa version 2.0, le service GGDC (Meier-Kolthoff et al. 2013)
+convertit la distance avec un modele logistique (GLM) et recommande d'autres
+reglages (BLAST+ avec une longueur de mot de 38, algorithme "coverage") ; les
+coefficients de ce modele ne sont pas publies dans l'article. Les valeurs
+produites ici ne sont donc PAS directement comparables a celles du site GGDC
+actuel, surtout loin du seuil. Pour valider une conclusion, soumettre a GGDC
+(https://ggdc.dsmz.de) les paires dont la distance est proche de 0.0412 et
+comparer les decisions "meme espece / especes differentes".
+
+References :
+  Auch AF, Klenk HP, Goker M (2010). Stand Genomic Sci 2(1):142-148.
+  Meier-Kolthoff JP, Auch AF, Klenk HP, Goker M (2013). "Genome sequence-based
+  species delimitation with confidence intervals and improved distance
+  functions." BMC Bioinformatics 14:60.
+
 USAGE :
     python dddh.py <dossier_genomes> <dossier_sortie>
         <dossier_genomes> : contient un fichier .fas/.fasta/.fna par genome.
@@ -195,5 +213,5 @@ if paires_sans_alignement:
     for a, b in paires_sans_alignement:
         print("     %s  vs  %s" % (a, b))
 print("  -> distance GBDP (formule 2)     :", out_matrix_d)
-print("  -> similarite estimee (~%%dDDH)   :", out_matrix_s)
+print("  -> similarite estimee (~%dDDH)    :", out_matrix_s)
 print("  Seuil espece : d > %.4f (similarite < ~70%%) => especes differentes" % SEUIL_ESPECE)
