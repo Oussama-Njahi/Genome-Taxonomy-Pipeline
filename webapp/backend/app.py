@@ -121,6 +121,18 @@ async def job_results(job_id: str):
                 values = line.rstrip("\n").split("\t")
                 qc_rows.append(dict(zip(header, values)))
 
+    # Prodigal's proteins (proteins/<genome>.faa) are an intermediate file for POCP: only their count per
+    # genome is shown, as a column of the register, and only when the step ran.
+    proteins_dir = job_dir / "proteins"
+    if qc_rows and any(proteins_dir.glob("*.faa")):
+        for row in qc_rows:
+            faa = proteins_dir / (row.get("Genome", "") + ".faa")
+            if faa.exists():
+                with open(faa) as fh:
+                    row["Proteins"] = str(sum(1 for line in fh if line.startswith(">")))
+            else:
+                row["Proteins"] = ""
+
     produced = {
         key: f"/api/jobs/{job_id}/files/{key}"
         for key, (relative_path, _) in RESULT_FILES.items()

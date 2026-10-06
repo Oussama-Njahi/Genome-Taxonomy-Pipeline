@@ -577,6 +577,8 @@ function renderQcTable(rows) {
     { key: "Taille(pb)", label: "Size (bp)", fmt: (v) => Number(v).toLocaleString("en-US") },
     { key: "GC(%)", label: "GC %" },
     { key: "Contigs", label: "Contigs" },
+    // added by the backend only when Prodigal ran
+    ...("Proteins" in rows[0] ? [{ key: "Proteins", label: "Proteins", fmt: (v) => (v ? Number(v).toLocaleString("en-US") : "") }] : []),
     { key: "Completeness(%)", label: "Complete %" },
     { key: "Contamination(%)", label: "Contam. %" },
   ];
