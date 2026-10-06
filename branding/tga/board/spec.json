@@ -1,0 +1,31 @@
+{
+  "brand": "TGA",
+  "tagline": "Taxo Genomic Analyses",
+  "brief": "A bioinformatics pipeline that decides, from whole genomes, whether bacterial strains belong to the same species or genus (ANI, dDDH, AAI, POCP, core-gene phylogenomics). Its audience is microbiologists and taxonomists; its interface is set like a natural-history atlas plate.",
+  "adjectives": ["rigorous", "scholarly", "precise", "classificatory"],
+  "criteria": "Avoid the double helix and dotted-node trees; read as TGA; belong to the atlas interface (paper, ink, Prussian blue); survive as a 16 px favicon.",
+  "mockups": ["readme", "terminal", "website", "favicon-tab", "badge", "business-card"],
+  "nav": ["Specimens", "Contents", "Method"],
+  "brand_color": "#2F4A63",
+  "tile_color": "#F6EEE3",
+  "greyscale": false,
+  "designer": "Oussama Njahi",
+  "round": 2,
+  "concepts": [
+    {
+      "name": "Dendrogram",
+      "symbol": "/home/zamme/stage/branding/tga/final/tga-favicon-mark.svg",
+      "lockup": "/home/zamme/stage/branding/tga/final/tga-horizontal-color.svg",
+      "symbol_on_tile": "/home/zamme/stage/branding/tga/final/tga-favicon-mark.svg",
+      "lockup_on_dark": "/home/zamme/stage/branding/tga/final/tga-wordmark-reversed.svg",
+      "idea": "The letters T, G and A are the leaves of a dendrogram — the same figure the pipeline draws.",
+      "rationale": [
+        "The mark is the tool's own output: G and A are sisters, T joins them higher up",
+        "Bodoni Moda letters and Prussian-blue branches match the atlas interface",
+        "A simplified tree-and-leaves cut keeps it legible as a 16 px favicon"
+      ]
+    }
+  ],
+  "recommendation": "Dendrogram — chosen direction, refined into the final kit.",
+  "next_steps": ["Use the favicon and wordmark in the web interface", "Use the stacked lockup on posters and the report cover"]
+}
