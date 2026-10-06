@@ -3,11 +3,16 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Taxo Genomics Analyses</title>
+  <title>TGA — Taxo Genomics Analyses</title>
   <meta name="description" content="Bacterial genome taxonomy in one run: quality control, ANI, dDDH, AAI, POCP and a phylogenomic tree." />
   <link rel="preload" href="/fonts/spectral-400.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="preload" href="/fonts/bodoni-moda-var.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="/css/style.css" />
+  <link rel="icon" href="/icons/favicon.ico" sizes="48x48" />
+  <link rel="icon" href="/icons/favicon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+  <link rel="manifest" href="/icons/site.webmanifest" />
+  <meta name="theme-color" content="#F6EEE3" />
 </head>
 <body>
   <!-- avoid-ai-design-ignore: K7 (focus styles live in css/style.css: a global :focus-visible ring) -->
@@ -15,7 +20,10 @@
 
   <header class="running-head">
     <div class="running-head-inner">
-      <a class="running-title" href="#top">Taxo Genomics Analyses</a>
+      <a class="running-title" href="#top">
+        <img class="running-mark" src="/img/brand/tga-favicon-mark.svg" alt="" width="32" height="32" />
+        <span class="running-name">Taxo Genomics Analyses</span>
+      </a>
       <nav class="running-nav" aria-label="Sections">
         <a href="#analyze">Specimens</a>
         <a href="#contents">Contents</a>
@@ -28,6 +36,8 @@
     <!-- ============ TITLE PAGE ============ -->
     <section class="spread title-spread" id="top">
       <div class="page page-verso title-page">
+        <img class="title-mark" src="/img/brand/tga-wordmark-color.svg" width="380" height="241"
+             alt="TGA: the letters T, G and A as the leaves of a dendrogram" />
         <hgroup class="title">
           <h1 class="title-name">Taxo Genomics<br />Analyses</h1>
           <p class="title-sub">in one run</p>
@@ -310,9 +320,7 @@
 
   <footer class="colophon">
     <p class="fleuron" aria-hidden="true">&#x2766;</p>
-    <p><span class="colophon-label">Colophon.</span>
-      Taxo Genomics Analyses. Set in Bodoni Moda and Spectral, with IBM Plex Mono for the log.
-      Fonts under the SIL Open Font License; animation by GSAP.</p>
+    <p>Taxo Genomics Analyses</p>
   </footer>
 
   <script src="/vendor/gsap.min.js"></script>
