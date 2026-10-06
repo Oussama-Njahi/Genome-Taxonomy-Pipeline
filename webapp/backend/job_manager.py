@@ -44,7 +44,25 @@ class JobManager:
     def status(self, job_id: str):
         with self.lock:
             job = self.jobs.get(job_id)
+            if job is None:
+                job = self._from_disk(job_id)
             return dict(job) if job else None
+
+    def _from_disk(self, job_id: str):
+        """Jobs live in memory, so a restart forgets them. A job whose folder still holds results is
+        reported as done (it is no longer running), so its results stay viewable after a restart."""
+        if not job_id.isalnum():
+            return None
+        job_dir = self.jobs_dir / job_id
+        results = job_dir / "results"
+        if not results.is_dir() or not any(results.iterdir()):
+            return None
+        n_genomes = sum(1 for f in (job_dir / "genomes").iterdir()
+                        if f.suffix.lower() in ALLOWED_EXTENSIONS) if (job_dir / "genomes").is_dir() else None
+        job = {"status": "done", "step": TOTAL_STEPS, "total": TOTAL_STEPS, "label": "Completed",
+               "log": [], "error": None, "n_genomes": n_genomes, "steps": "all"}
+        self.jobs[job_id] = job
+        return job
 
     def cancel(self, job_id: str) -> bool:
         """Cancel a queued or running job. Returns False if the job is
