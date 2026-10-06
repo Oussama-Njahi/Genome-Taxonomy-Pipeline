@@ -1,4 +1,4 @@
-/* Taxo Genomics Analyses - "Tafel": the interface as an open plate atlas.
+/* TGA, Taxo Genomics Analyses - "Tafel": the interface as an open plate atlas.
    Every section is a spread (verso | recto). Data sits on flat plate paper,
    never on texture. One signature motion: ink drawing a tree. */
 
@@ -91,13 +91,16 @@ code { font-family: var(--f-mono); font-size: 0.82em; }
 }
 .running-head-inner {
   max-width: var(--page-max); margin: 0 auto; padding: 12px var(--pad);
-  display: flex; align-items: baseline; justify-content: space-between; gap: 24px;
+  display: flex; align-items: center; justify-content: space-between; gap: 24px;
 }
 .running-title, .running-nav a {
   font-variant-caps: all-small-caps; letter-spacing: 0.12em; font-size: 17px;
   color: var(--ink); text-decoration: none;
 }
-.running-title { font-style: italic; letter-spacing: 0.06em; font-variant-caps: normal; font-size: 16px; }
+.running-title { font-style: italic; letter-spacing: 0.06em; font-variant-caps: normal; font-size: 16px;
+  display: inline-flex; align-items: center; gap: 10px; }
+/* the small-size cut of the logo: the dendrogram alone, its three leaves standing for T, G and A */
+.running-mark { display: block; flex: none; width: 32px; height: 32px; }
 .running-nav { display: flex; gap: clamp(14px, 3vw, 34px); }
 .running-nav a:hover { color: var(--prussian); text-decoration: underline; }
 
@@ -127,6 +130,9 @@ code { font-family: var(--f-mono); font-size: 0.82em; }
 /* the recto of the title page carries the opening paragraph */
 .title-recto { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; }
 
+/* the logo as frontispiece; its SVG has 16/380 of padding, pulled back so the ink lines up with the title */
+.title-mark { --w: clamp(190px, 20vw, 290px); display: block; width: var(--w); height: auto;
+  margin: 0 0 clamp(18px, 2.2vw, 30px) calc(var(--w) * -0.042); }
 .title { display: flex; flex-direction: column; gap: 6px; }
 .title-name {
   font-family: var(--f-display);
@@ -146,8 +152,8 @@ code { font-family: var(--f-mono); font-size: 0.82em; }
 
 .lede { max-width: 31em; font-size: 19px; line-height: 1.6; hyphens: auto; text-wrap: pretty; }
 .initial {
-  float: left; font-family: var(--f-black); font-size: 74px; line-height: 0.8;
-  margin: 8px 10px 0 -2px; color: var(--carmine);
+  float: left; font-family: var(--f-black); font-size: 104px; line-height: 0.72;
+  margin: 9px 12px 0 -2px; color: var(--carmine);
 }
 .lede-note { margin: 18px 0 34px; font-style: italic; color: var(--ink-2); }
 
@@ -417,7 +423,6 @@ input[type="checkbox"]:checked::after { opacity: 1; }
 /* ---------- Colophon ---------- */
 .colophon { max-width: 36em; margin: 0 auto; padding: 40px 24px 72px; text-align: center; font-size: 15px; line-height: 1.55; color: var(--ink-2); }
 .fleuron { font-size: 26px; color: var(--carmine); margin-bottom: 10px; }
-.colophon-label { font-variant-caps: all-small-caps; letter-spacing: 0.08em; color: var(--ink); }
 
 /* ---------- Narrow screens: pages stack, the fold disappears ---------- */
 @media (max-width: 900px) {
@@ -437,8 +442,7 @@ input[type="checkbox"]:checked::after { opacity: 1; }
     "box num title title" ". . tool tool" ". . desc desc"; }
   .toc-leader { display: none; }
   .toc-tool { font-size: 15px; }
-  .running-title { display: none; }
-  .running-head-inner { justify-content: center; }
+  .running-name { display: none; }
   .plate { padding: 14px; }
   .press { padding: 20px 18px 16px; }
 }
