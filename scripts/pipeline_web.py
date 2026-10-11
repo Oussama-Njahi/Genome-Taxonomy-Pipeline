@@ -8,6 +8,7 @@
 #
 # Usage:
 #   python pipeline_web.py --genomes-dir <dir> --output-dir <dir> [--job-id <id>] [--threads 4] [--steps qc,ani,aai]
+#                          [--outgroup <genome>]
 #
 # Progress is reported on stdout as lines "PROGRESS <n>/9 <label>" so a caller
 # (e.g. the FastAPI backend) can parse them to drive a progress bar.
@@ -215,7 +216,7 @@ def etape_pocp(proteins_dir, results_dir):
     print("    -> pocp_out/pocp_matrice.tsv created")
 
 
-def etape_arbre(fichiers, results_dir, job_id, threads):
+def etape_arbre(fichiers, results_dir, job_id, threads, outgroup=None):
     announce(8)
     if not os.path.exists(EASYCG + "/EasyCGTree.pl"):
         fail("EasyCGTree4 not found at %s - it must be installed manually "
@@ -229,12 +230,19 @@ def etape_arbre(fichiers, results_dir, job_id, threads):
          "-hmm", "bac120", "-tree", "sm", "-tree_app", "fasttree",
          "-thread", str(threads)], cwd=EASYCG)
     arbre = EASYCG + "/" + input_name + ".bac120.120.supermatrix.fasttree.tree"
-    if os.path.exists(arbre):
-        shutil.copy(arbre, results_dir + "/arbre.tree")
-        print("    -> arbre.tree copied to results")
-    else:
+    if not os.path.exists(arbre):
         fail("tree file not found (%s) - EasyCGTree may have failed" % arbre)
+    # FastTree ecrit un arbre non enracine : on le garde tel quel, et arbre.tree
+    # (lu par les figures et l'interface) est sa version enracinee, au point
+    # median ou sur le groupe externe donne avec --outgroup.
+    brut = results_dir + "/arbre_non_enracine.tree"
+    shutil.copy(arbre, brut)
     cleanup_easycgtree(input_name)
+    cmd = ["python", SCRIPTS + "/root_tree.py", brut, results_dir + "/arbre.tree"]
+    if outgroup:
+        cmd += ["--outgroup", outgroup]
+    run(cmd)
+    print("    -> arbre.tree (rooted) and arbre_non_enracine.tree copied to results")
 
 
 def cleanup_easycgtree(input_name):
@@ -263,6 +271,9 @@ def main():
     parser.add_argument("--threads", type=int, default=4, help="Threads for fastANI/EasyCGTree")
     parser.add_argument("--steps", type=str, default="all",
                          help="Comma-separated steps to run (" + ", ".join(STEPS_KEYS) + "). Default: all")
+    parser.add_argument("--outgroup", type=str, default=None,
+                         help="Genome name(s) to root the tree on, comma-separated, without the file extension "
+                              "(default: midpoint rooting)")
     args = parser.parse_args()
 
     selection = etapes_demandees(args.steps)
@@ -306,7 +317,7 @@ def main():
         else:
             etape_pocp(proteins_dir, results_dir)
     if "arbre" in selection:
-        etape_arbre(fichiers, results_dir, job_id, args.threads)
+        etape_arbre(fichiers, results_dir, job_id, args.threads, args.outgroup)
     if "figures" in selection:
         etape_figures(results_dir)
 
