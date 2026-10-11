@@ -110,6 +110,8 @@ heatmap_fig <- function(data, valcol, titre, sous, legende, fichier, seuil,
   fond <- couleur(data[[valcol]], seuil, lo, hi, distance)
   meme <- !manquant & (if (distance) data[[valcol]] <= seuil else data[[valcol]] >= seuil)
   data$label_txt <- ifelse(manquant, "NA", formatC(data[[valcol]], format = "f", digits = decimales))
+  # colonne optionnelle "flag" : valeur a lire avec prudence, marquee d'un asterisque (voir l'ANI)
+  if (!is.null(data$flag)) data$label_txt <- paste0(data$label_txt, ifelse(!is.na(data$flag) & data$flag, "*", ""))
   data$label_col <- ifelse(manquant, INK_MED, ifelse(!manquant & sombre(ifelse(manquant, NA_FILL, fond)),
                                                      BG_PAPER, INK_DARK))
   data$label_face <- ifelse(meme, "bold", "plain")             # chiffres gras = meme taxon
@@ -153,14 +155,19 @@ present <- function(chemin, figure) {
 # ---------- 1) ANI ----------
 f <- file.path(RES, "ani_resultats.txt")
 if (present(f, "ANI heatmap")) {
-  d <- read.table(f, sep = "\t", header = FALSE)[, 1:3]
-  colnames(d) <- c("GenomeA", "GenomeB", "ANI")
+  d <- read.table(f, sep = "\t", header = FALSE)[, 1:5]
+  colnames(d) <- c("GenomeA", "GenomeB", "ANI", "Mapped", "Total")
   d$GenomeA <- clean(d$GenomeA); d$GenomeB <- clean(d$GenomeB)
+  # Fraction alignee = fragments alignes / fragments du genome requete. Un ANI >= 95 % mesure sur moins de
+  # la moitie du genome ne suffit pas a conclure "meme espece" : la case est marquee d'un asterisque.
+  # (meme seuil que MIN_ALIGNED_FRACTION dans webapp/frontend/js/plates.js)
+  d$flag <- d$GenomeA != d$GenomeB & d$ANI >= 95 & d$Mapped / d$Total < 0.5
+  note_af <- if (any(d$flag)) " *: aligned fraction under 50 %." else ""
   # fastANI n'ecrit pas les paires trop eloignees : on les ajoute en NA
   noms <- unique(c(d$GenomeA, d$GenomeB))
   d <- merge(expand.grid(GenomeA = noms, GenomeB = noms, stringsAsFactors = FALSE), d, all.x = TRUE)
   heatmap_fig(d, "ANI", "Average Nucleotide Identity (ANI)",
-              "Species threshold 95 %. Rows: query genome. NA: too distant for FastANI.",
+              paste0("Species threshold 95 %. Rows: query genome. NA: too distant for FastANI.", note_af),
               "ANI (%)", file.path(RES, "heatmap_ani.png"), seuil = 95)
   n_figures <- n_figures + 1
 }
