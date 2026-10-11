@@ -1,8 +1,8 @@
 // app.js - Frontend logic: upload, poll job status, render results as plates.
 // No build step, no framework: plain fetch() calls against the FastAPI backend.
 import {
-  METRICS, appendName, clusterOrder, contestedPairs, drawLegend, drawMatrix, drawTree, formatValue,
-  layoutTree, parseAAI, parseANI, parseMatrix, parseNewick, verdict,
+  METRICS, MIN_ALIGNED_FRACTION, appendName, clusterOrder, contestedPairs, drawLegend, drawMatrix, drawTree,
+  formatValue, layoutTree, parseAAI, parseANI, parseMatrix, parseNewick, sameSide, verdict,
 } from "./plates.js";
 
 const $ = (id) => document.getElementById(id);
@@ -289,15 +289,20 @@ function renderProgress(state) {
   const total = steps.length;
   const done = state.status === "done";
   const running = state.status === "running";
-  // PROGRESS n/total: chapter n is in the press, so n-1 are finished
+  // PROGRESS n/total: step n is in the press, so n-1 are finished
   const finished = done ? total : Math.max(0, (state.step || 0) - 1);
   const pct = total ? Math.round((finished / total) * 100) : 0;
   progressFill.style.width = pct + "%";
   progressPct.textContent = pct + "%";
+  // the rule's divisions and the hatched segment of the step in the press (see .press-track in style.css)
+  const track = progressFill.parentElement;
+  track.style.setProperty("--steps", total || 1);
+  track.style.setProperty("--p", total ? finished / total : 0);
+  track.classList.toggle("is-running", running && finished < total);
   progressLabel.textContent =
     state.status === "queued" ? "Waiting for the press…"
       : done ? "Finished"
-      : state.step ? `Chapter ${state.step} of ${total} — ${state.label}` : "Starting…";
+      : state.step ? `Step ${state.step} of ${total} — ${state.label}` : "Starting…";
 
   pressSteps.textContent = "";
   steps.forEach((s, k) => {
@@ -530,8 +535,33 @@ function renderInspector(box, a, b, currentKey) {
     vd.textContent = verdict(m, v === undefined ? null : v);
     tr.append(th, td, vd);
     table.appendChild(tr);
+    if (m.key === "ani") appendAlignedFraction(table, pairs, a, b, v);
   });
   box.appendChild(table);
+}
+
+// Under the ANI row: the share of the genome that ANI was measured on (both directions when they differ),
+// with a caution when a "same species" value rests on less than MIN_ALIGNED_FRACTION of it.
+function appendAlignedFraction(table, pairs, a, b, ani) {
+  const f = pairs.fraction && pairs.fraction.get(a, b);
+  if (f === undefined || f === null) return;
+  const g = pairs.fraction.get(b, a);
+  const pct = (x) => Math.round(x * 100);
+  const both = g !== undefined && g !== null && pct(f) !== pct(g);
+  const lowest = both ? Math.min(f, g) : f;
+  const low = typeof ani === "number" && sameSide(METRICS.ani, ani) && lowest < MIN_ALIGNED_FRACTION;
+
+  const tr = document.createElement("tr");
+  tr.className = "sub" + (low ? " caution" : "");
+  const th = document.createElement("th");
+  th.textContent = "aligned";
+  const td = document.createElement("td");
+  td.textContent = (both ? `${pct(f)} / ${pct(g)}` : pct(f)) + "\u00a0%";
+  const note = document.createElement("td");
+  note.className = "verdict";
+  note.textContent = low ? "too little to trust" : "of the genome";
+  tr.append(th, td, note);
+  table.appendChild(tr);
 }
 
 function renderContested(box, metric, pairs, order) {

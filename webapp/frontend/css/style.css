@@ -233,7 +233,7 @@ code { font-family: var(--f-mono); font-size: 0.82em; }
 .file-count { margin-top: 14px; font-style: italic; color: var(--ink-2); }
 .file-count.ready { color: var(--ink); font-style: normal; }
 
-/* Table of contents: each chapter is a checkbox */
+/* Table of contents: each step is a checkbox */
 .toc { list-style: none; margin: 0; padding: 0; }
 .toc li + li { border-top: 1px dotted var(--rule); }
 .toc-row {
@@ -299,10 +299,28 @@ input[type="checkbox"]:checked::after { opacity: 1; }
 }
 .press-head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px 24px; }
 .press-title { font-family: var(--f-display); font-variation-settings: "opsz" 12; font-size: 28px; font-style: italic; }
-.press-status { color: var(--ink-2); }
-.press-pct { font-variant-numeric: lining-nums tabular-nums; color: var(--ink); margin-left: 8px; }
-.press-track { height: 3px; margin: 14px 0 20px; background: rgba(92, 74, 61, 0.18); }
-.press-fill { height: 100%; width: 0; background: var(--ink); transition: width 0.6s ease; }
+.press-status { color: var(--ink-2); display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 14px; }
+.press-pct { font-family: var(--f-display); font-variation-settings: "opsz" 12; font-weight: 600; font-size: 38px;
+  line-height: 1; font-variant-numeric: lining-nums tabular-nums; color: var(--prussian); }
+/* the bar is an engraved rule: one division per step (--steps), finished steps inked in Prussian blue (--p is
+   their share), and the step in the press hatched in carmine, its hatching moving while the run is alive */
+.press-track { --steps: 9; --p: 0; position: relative; height: 22px; margin: 20px 4px 26px; padding: 3px;
+  background: var(--plate); border: 1px solid var(--ink);
+  box-shadow: 0 0 0 3px var(--plate), 0 0 0 4px var(--rule); }
+.press-fill { height: 100%; width: 0; background: var(--prussian); transition: width 0.6s ease; }
+.press-track::before {
+  content: ""; position: absolute; top: 3px; bottom: 3px; display: none;
+  left: calc(3px + (100% - 6px) * var(--p)); width: calc((100% - 6px) / var(--steps));
+  background: repeating-linear-gradient(135deg, var(--carmine) 0 4px, transparent 4px 9px);
+  animation: press-hatch 0.9s linear infinite; transition: left 0.6s ease;
+}
+.press-track.is-running::before { display: block; }
+.press-track::after {
+  content: ""; position: absolute; inset: 3px; pointer-events: none;
+  background: linear-gradient(90deg, transparent calc(100% - 1px), rgba(42, 33, 27, 0.5) 0) 0 0 / calc(100% / var(--steps)) 100%;
+}
+@keyframes press-hatch { to { background-position: 12.73px 0; } }   /* 9px hatch at 45deg = 12.73px across */
+@media (prefers-reduced-motion: reduce) { .press-track::before { animation: none; } }
 .press-steps { list-style: none; margin: 0; padding: 0; columns: 2 18em; column-gap: 40px; }
 .press-steps li { break-inside: avoid; display: grid; grid-template-columns: 3em 1fr auto; gap: 8px; padding: 5px 0;
   border-bottom: 1px dotted var(--rule); color: var(--ink-2); }
@@ -367,6 +385,12 @@ input[type="checkbox"]:checked::after { opacity: 1; }
 .inspector-table td.verdict { text-align: left; padding-left: 10px; font-style: italic; font-size: 14px; color: var(--ink-2); }
 .inspector-table tr + tr { border-top: 1px dotted var(--rule); }
 .inspector-table tr.current th { color: var(--ink); }
+/* the aligned fraction belongs to the ANI row above it: no rule between them, smaller, indented */
+.inspector-table tr.sub { border-top: 0; font-size: 14px; color: var(--ink-2); }
+.inspector-table tr.sub th { padding: 0 6px 5px 10px; }
+.inspector-table tr.sub td { padding: 0 0 5px; }
+.inspector-table tr.sub td.verdict { padding-left: 10px; }
+.inspector-table tr.caution, .inspector-table tr.caution td.verdict { color: var(--carmine); }
 .contested { list-style: none; margin: 0; padding: 0; }
 .contested li { padding: 4px 0; border-bottom: 1px dotted var(--rule); }
 .contested button { font: inherit; text-align: left; background: none; border: 0; padding: 0; cursor: pointer; color: var(--ink); width: 100%; display: flex; justify-content: space-between; gap: 10px; }

@@ -85,14 +85,24 @@ class Pairs {
   get(a, b) { return this.values.get(a + "\u0000" + b); }
 }
 
-// fastANI: query, reference, ANI, mapped fragments, total fragments (no header)
+// An ANI is only as good as the share of the genome it was measured on: below this aligned fraction a
+// "same species" value rests on too little sequence to be trusted on its own.
+export const MIN_ALIGNED_FRACTION = 0.5;
+
+// fastANI: query, reference, ANI, mapped fragments, total fragments (no header).
+// p.fraction holds mapped / total, the aligned fraction of the query genome.
 export function parseANI(text) {
   const p = new Pairs();
+  p.fraction = new Pairs();
   for (const line of text.split("\n")) {
     const c = line.split("\t");
     if (c.length < 3) continue;
     const v = parseFloat(c[2]);
-    if (!isNaN(v)) p.set(cleanName(c[0]), cleanName(c[1]), v);
+    if (isNaN(v)) continue;
+    const a = cleanName(c[0]), b = cleanName(c[1]);
+    p.set(a, b, v);
+    const mapped = parseFloat(c[3]), total = parseFloat(c[4]);
+    if (total > 0 && !isNaN(mapped)) p.fraction.set(a, b, mapped / total);
   }
   // fastANI omits pairs it cannot align (below ~80 %): record them as "no value"
   for (const a of p.names) for (const b of p.names) if (p.get(a, b) === undefined) p.set(a, b, null);
