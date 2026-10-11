@@ -10,6 +10,8 @@ Usage :
   python scripts/pipeline.py                      # les 9 etapes
   python scripts/pipeline.py --steps qc,ani,dddh  # seulement certaines
   python scripts/pipeline.py --threads 8          # threads pour FastANI/EasyCGTree
+  python scripts/pipeline.py --outgroup Staphylococcus-aureus-NCTC8325
+                                                  # racine de l'arbre (defaut : point median)
 
 Etapes (--steps, separees par des virgules) :
   qc, checkm2, proteines, ani, dddh, aai, pocp, arbre, figures
@@ -26,7 +28,7 @@ if __name__ == "__main__":
     if "-h" in sys.argv[1:] or "--help" in sys.argv[1:]:
         print(__doc__)
         sys.exit(0)
-    # Les options (--steps, --threads) sont transmises telles quelles.
+    # Les options (--steps, --threads, --outgroup) sont transmises telles quelles.
     cmd = [sys.executable, os.path.join(SCRIPTS, "pipeline_web.py"),
            "--genomes-dir", os.path.join(BASE, "genomes"),
            "--output-dir", BASE] + sys.argv[1:]
