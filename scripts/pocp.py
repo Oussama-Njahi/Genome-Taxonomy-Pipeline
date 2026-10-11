@@ -13,6 +13,11 @@ Principe (pour chaque paire de genomes A et B) :
 Une proteine est "conservee" si elle a, dans l'autre genome, un equivalent
 trouve par DIAMOND avec : identite >= 40 %, couverture >= 50 %, e-value <= 1e-5.
 
+DIAMOND est lance en mode --ultra-sensitive : Qin et al. ont defini le POCP
+avec BLASTP, et le mode par defaut de DIAMOND (rapide) manque une partie des
+proteines divergentes (40-50 % d'identite), ce qui sous-estime le POCP pres
+du seuil de genre. Le mode ultra-sensible est le plus proche de BLASTP.
+
 USAGE :
     python pocp.py <dossier_proteines> <dossier_sortie>
         <dossier_proteines> : contient un fichier .faa par genome (proteines).
@@ -62,7 +67,7 @@ def conserved(query_name, subject_name):
         "-d", os.path.join(db_dir, subject_name),
         "-o", out_tsv,
         "--outfmt", "6", "qseqid", "sseqid", "pident", "length", "qlen",
-        "--evalue", "1e-5", "--max-target-seqs", "1", "--quiet"
+        "--evalue", "1e-5", "--max-target-seqs", "1", "--ultra-sensitive", "--quiet"
     ], check=True)
     conserved_ids = set()
     with open(out_tsv) as fh:

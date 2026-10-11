@@ -16,6 +16,11 @@ Methode et coefficients publies dans :
 
 Principe (pour chaque paire de genomes A et B) :
   1. BLASTN A -> B, et B -> A (deux sens, la recherche est asymetrique).
+     L'algorithme est force a "-task blastn" (mot de 11 nt, celui du BLASTN
+     classique d'Auch et al.) : sans cette option, la commande blastn de
+     BLAST+ lance megablast (mot de 28 nt), qui ne trouve que les regions
+     les plus conservees et sous-estime donc la distance entre especes
+     differentes.
   2. Ne garder que les alignements (HSP) avec e-value <= 1e-2.
   3. Corriger les chevauchements entre HSP sur une meme sequence
      ("greedy-with-trimming") : une region dupliquee ne doit etre
@@ -108,6 +113,7 @@ def hsps_diriges(query_name, subject_name):
         "-query", fasta_byname[query_name],
         "-db", os.path.join(db_dir, subject_name),
         "-out", out_tsv,
+        "-task", "blastn",       # pas megablast (defaut de BLAST+), voir l'en-tete
         "-outfmt", "6 qseqid qstart qend length pident",
         "-evalue", str(EVALUE_MAX),
         "-max_target_seqs", "100000",
