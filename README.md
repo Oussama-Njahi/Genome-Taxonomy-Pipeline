@@ -14,10 +14,10 @@ Given a folder of bacterial genome assemblies (FASTA), the pipeline runs nine st
 | 2 | Completeness / contamination (needs step 1) | [CheckM2](https://github.com/chklovski/CheckM2) |
 | 3 | Protein prediction | [Prodigal](https://github.com/hyattpd/Prodigal) |
 | 4 | Average Nucleotide Identity (species delineation, 95% threshold) | [FastANI](https://github.com/ParBLiSS/FastANI) |
-| 5 | digital DNA-DNA Hybridization (species delineation, GBDP formula 2, Auch et al. 2010 method) | custom script + BLASTN |
+| 5 | digital DNA-DNA Hybridization (species delineation, GBDP formula 2, Auch et al. 2010 method) | custom script + BLASTN (`-task blastn`) |
 | 6 | Average Amino acid Identity (genus-level relationships) | [EzAAI](https://github.com/endixk/ezaai) |
-| 7 | Percentage of Conserved Proteins (genus delineation, 50% threshold, needs step 3) | custom script + [DIAMOND](https://github.com/bbuchfink/diamond) |
-| 8 | Phylogenomic tree (120 bacterial core genes, GTDB bac120 set) | [EasyCGTree4](https://github.com/zdf1987/EasyCGTree4) (Perl) + FastTree |
+| 7 | Percentage of Conserved Proteins (genus delineation, 50% threshold, needs step 3) | custom script + [DIAMOND](https://github.com/bbuchfink/diamond) (`--ultra-sensitive`) |
+| 8 | Phylogenomic tree (120 bacterial core genes, GTDB bac120 set), rooted at its midpoint or on an outgroup | [EasyCGTree4](https://github.com/zdf1987/EasyCGTree4) (Perl) + FastTree |
 | 9 | Figures (heatmaps + annotated tree) | R (ggplot2, ggtree) |
 
 A single command runs the full chain:
@@ -28,6 +28,8 @@ python scripts/pipeline.py
 
 Run only a subset with `--steps` (comma-separated, e.g. `--steps qc,ani,dddh`) — useful to skip CheckM2 (RAM-heavy, see Requirements) while still getting the rest.
 
+FastTree writes an unrooted tree, so the pipeline roots it before drawing it: at its midpoint by default, or on an outgroup with `--outgroup` (one or more genome names without the file extension, comma-separated, e.g. `--outgroup Staphylococcus-aureus-NCTC8325`). Prefer an outgroup when you have one. `results/arbre.tree` is the rooted tree; the tree as computed is kept in `results/arbre_non_enracine.tree`.
+
 ## Architecture
 
 **Python** orchestrates the whole pipeline via `subprocess`, calling out to **Perl** (EasyCGTree, for the phylogenomic tree) and **R** (ggplot2/ggtree, for the figures) — the same multi-language integration pattern used by reference pipelines such as [PGCGAP](https://github.com/liaochenlanruo/pgcgap), extended here with AAI and POCP, which PGCGAP does not provide.
@@ -35,6 +37,12 @@ Run only a subset with `--steps` (comma-separated, e.g. `--steps qc,ani,dddh`) �
 ## Key finding (validation dataset)
 
 On a 14-genome test set (*Bhargavaea*, *Candidatus Kurthia*, *Caryophanon*, plus four outgroups), the four independent analyses consistently show that ***Bacillus ndiopicus*** is genomically closer to *Caryophanon* (AAI ≈ 69%, POCP ≈ 50–54%) than to *Bacillus subtilis* (AAI ≈ 60%, POCP ≈ 38%) — suggesting a taxonomic misclassification, confirmed independently by ANI, AAI, POCP, and the phylogenomic tree topology.
+
+## Notes on the methods
+
+- **ANI and aligned fraction.** FastANI reports how many fragments of the query genome it could align. The interface shows this aligned fraction under each ANI value, and both the interface and the ANI figure mark a "same species" ANI (≥ 95%) measured on less than 50% of the genome, which is too little to conclude on its own.
+- **dDDH uses classic BLASTN.** BLAST+ runs megablast when `blastn` is called without `-task`; megablast only aligns the most conserved regions and underestimates the distance between different species (on the test set, an outgroup from another genus came out *closer* than species of the same genus). `dddh.py` therefore sets `-task blastn`.
+- **POCP uses DIAMOND in `--ultra-sensitive` mode.** POCP was defined with BLASTP (Qin et al. 2014); DIAMOND's default fast mode misses part of the divergent proteins and lowers POCP by about one point on the test set.
 
 ## Note on dDDH values
 
@@ -100,6 +108,7 @@ Then open `http://127.0.0.1:8000`. Upload at least 5 genome assemblies (`.fas`, 
 │   ├── pipeline_web.py   # the 9-step pipeline (also used by the web interface)
 │   ├── pocp.py           # POCP calculation (DIAMOND-based)
 │   ├── dddh.py           # dDDH calculation (BLASTN-based, GBDP formula 2)
+│   ├── root_tree.py      # roots the tree (midpoint or outgroup), keeping branch supports
 │   └── plot_all_web.R    # figure generation (ggplot2 + ggtree)
 ├── webapp/
 │   ├── backend/          # FastAPI server (app.py, job_manager.py)
