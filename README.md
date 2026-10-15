@@ -73,13 +73,17 @@ EasyCGTree4 is not distributed via conda and must be installed manually — see 
 
 ## Usage
 
-Place your genome assemblies (`.fas`, `.fasta` or `.fna`, at least 5) in `genomes/`, then run:
+Place your genome assemblies (`.fas`, `.fasta` or `.fna`, in any case; at least 2, or 5 for the phylogenomic tree) in `genomes/`, then run:
 
 ```bash
 python scripts/pipeline.py
 ```
 
-Results (quality report, ANI/dDDH/AAI/POCP matrices, tree, figures) are written to `results/`, predicted proteins to `proteins/`. Options such as `--steps` and `--threads` work as described above.
+Results (quality report, ANI/dDDH/AAI/POCP matrices, tree, figures) are written to `results/`, predicted proteins to `proteins/`. `--steps` works as described above; `--threads` defaults to all CPUs.
+
+Before any step, every genome is checked: it must be a non-empty DNA FASTA file, and its name (the file name without the extension) may only contain letters, digits, `.`, `_` and `-`, because it becomes the genome's label in every table and in the tree. Two files may not give the same name. The run stops with a message naming the file otherwise.
+
+Results are kept from one run to the next, so steps can be run separately (`--steps qc`, then `--steps checkm2`), but only for the same genomes: `results/genomes.tsv` records which genomes were analysed, and when they change, the previous `results/` and `proteins/` are moved to `previous_runs/<date>/` so that old and new results are never mixed.
 
 ## Web interface
 
@@ -90,7 +94,7 @@ cd webapp/backend
 uvicorn app:app --reload
 ```
 
-Then open `http://127.0.0.1:8000`. Upload at least 5 genome assemblies (`.fas`, `.fasta`, `.fna`), pick which steps to run via checkboxes, and the results (quality report, ANI/dDDH/AAI/POCP matrices, tree, heatmaps) become viewable and downloadable once the job finishes. A running job can be cancelled from the UI at any time.
+Then open `http://127.0.0.1:8000`. Upload at least 2 genome assemblies (`.fas`, `.fasta`, `.fna`; 5 if the tree is among the steps), pick which steps to run via checkboxes, and the results (quality report, ANI/dDDH/AAI/POCP matrices, tree, heatmaps) become viewable and downloadable once the job finishes. A running job can be cancelled from the UI at any time.
 
 ## Pipeline overview
 

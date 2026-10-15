@@ -29,7 +29,7 @@ Auteur : Oussama Njahi · Dépôt : https://github.com/Oussama-Njahi/Genome-Taxo
 
 ## 1. Résumé
 
-TGA prend en entrée un dossier d'assemblages de génomes bactériens (FASTA, au moins 5). En une seule exécution, il
+TGA prend en entrée un dossier d'assemblages de génomes bactériens (FASTA, au moins 2, ou 5 pour l'arbre). En une seule exécution, il
 calcule tous les critères génomiques utilisés pour délimiter les espèces et les genres :
 
 - **qualité des génomes** : taille, %GC, contigs ; complétude et contamination avec CheckM2 ;
@@ -132,6 +132,22 @@ Machine de développement : Ubuntu sous WSL2, 12 cœurs, 11 Go de RAM.
 Clés `--steps` : `qc, checkm2, proteines, ani, dddh, aai, pocp, arbre, figures`. Dépendances : `checkm2` a besoin de
 `qc`, et `pocp` a besoin de `proteines`. Si on saute une étape dont une autre dépend, seule celle-ci est ignorée,
 avec un avertissement ; le reste tourne.
+
+**Avant toute étape, chaque génome est vérifié.**
+- **Fichier :** l'extension `.fas`, `.fasta` ou `.fna` est acceptée quelle que soit la casse ; le fichier doit être
+  un vrai FASTA d'ADN et ne pas être vide.
+- **Nom :** il ne contient que des lettres, des chiffres et `.`, `_`, `-`, car il sert d'étiquette dans l'arbre
+  Newick. Deux fichiers ne peuvent pas donner le même nom.
+- **Nombre :** il faut au moins 2 génomes, ou 5 si l'arbre est demandé.
+
+En cas de problème, le run s'arrête avec un message qui nomme le fichier. L'interface web applique les mêmes règles à
+l'envoi, et elle corrige elle-même les noms : les espaces et parenthèses deviennent `_`, l'extension passe en
+minuscules.
+
+**Résultats d'un run à l'autre.** Les résultats sont gardés d'un run à l'autre pour les mêmes génomes, ce qui permet
+de lancer les étapes séparément. Si les génomes changent, les anciens `results/` et `proteins/` sont déplacés dans
+`previous_runs/<date>/`, pour que les figures ne mélangent jamais deux jeux. Les outils utilisent tous les cœurs
+disponibles (`--threads`).
 
 | # | Étape | Outil et paramètres | Sorties (`results/`) |
 |---|---|---|---|
@@ -244,7 +260,7 @@ du génome passe en rouge (« too little to trust ») et reçoit un astérisque 
 
 | Route | Rôle |
 |---|---|
-| `POST /api/jobs` | dépôt des génomes (`.fas`, `.fasta`, `.fna`, au moins 5) et choix des étapes ; crée un job |
+| `POST /api/jobs` | dépôt des génomes (`.fas`, `.fasta`, `.fna` ; au moins 2, ou 5 avec l'arbre) et choix des étapes ; vérifie les fichiers et crée un job |
 | `GET /api/jobs/{id}/status` | état, étape en cours, journal |
 | `POST /api/jobs/{id}/cancel` | annule le job, en arrêtant tout le groupe de processus (FastANI, CheckM2…) |
 | `GET /api/jobs/{id}/results` | registre qualité (avec le nombre de protéines prédites) et liste des fichiers produits |
@@ -252,7 +268,8 @@ du génome passe en rouge (« too little to trust ») et reçoit un astérisque 
 
 - **File d'attente** : les jobs passent un par un. Chaque job a son dossier `webapp/jobs/<id>/`, avec `genomes/`,
   `proteins/` et `results/`.
-- **Après un redémarrage** : un job terminé est retrouvé sur le disque, ses résultats restent consultables.
+- **Après un redémarrage** : l'état de chaque job est écrit dans `status.json`. Un job terminé garde ses résultats,
+  un job échoué reste échoué, et un job coupé en cours de route est signalé comme interrompu.
 
 ### 7.2 Frontend (`webapp/frontend`, HTML/CSS/JS sans build)
 
@@ -393,12 +410,13 @@ mamba create -n checkm2env -y -c conda-forge -c bioconda python=3.12 checkm2
 # EasyCGTree4 : installation manuelle dans EasyCGTree4/EasyCGTree.v4.2-Linux/ (voir README)
 ```
 
-**Ligne de commande** : placer les génomes (`.fas`, `.fasta`, `.fna`, au moins 5) dans `genomes/`, puis lancer :
+**Ligne de commande** : placer les génomes (`.fas`, `.fasta`, `.fna` ; au moins 2, ou 5 pour l'arbre) dans
+`genomes/`, puis lancer :
 
 ```bash
 python scripts/pipeline.py                                   # les 9 étapes
 python scripts/pipeline.py --steps qc,ani,dddh               # certaines étapes seulement
-python scripts/pipeline.py --threads 8                       # threads pour FastANI et EasyCGTree
+python scripts/pipeline.py --threads 8                       # threads (par défaut : tous les cœurs)
 python scripts/pipeline.py --outgroup Staphylococcus-aureus-NCTC8325   # racine de l'arbre
 ```
 
@@ -470,13 +488,14 @@ validation sont générés localement et exclus de git.
 - **Installation** : elle se fait en trois parties (deux environnements conda et EasyCGTree4 à la main). Un
   `Dockerfile` ou un script d'installation la simplifierait.
 - **Versions des outils** : elles ne sont pas enregistrées dans les dossiers de résultats.
-- **Threads** : fixés à 4 pour CheckM2 et BLAST.
 - **Scripts obsolètes** : `etape_ani.py`, `plot_ani.R`, `plot_aai.R`, `plot_pocp.R` et `plot_tree.R` contiennent des
   chemins en dur et sont à supprimer.
 - **Langue** : le français et l'anglais sont mélangés dans les noms de fonctions et de fichiers de sortie.
 - **Passage à l'échelle** : dDDH et POCP traitent les paires une par une. 50 génomes font 1 225 paires.
 - **Interface** : pas de limite de taille à l'envoi, et les jobs ne sont jamais nettoyés. C'est acceptable en local,
   mais pas pour un déploiement public.
+- **Vérification des génomes** : elle contrôle le format, pas la qualité biologique. Un génome très fragmenté ou
+  contaminé passe ; il est seulement signalé dans le registre (CheckM2).
 - **Tests** : seul l'enracinement est testé, et il n'y a pas d'intégration continue.
 - **Nom** : il n'est pas encore unifié (« Genome-Taxonomy-Pipeline », « Genome Taxonomy Explorer » dans l'API, « Taxo
   Genomics Analyses » dans l'interface).
