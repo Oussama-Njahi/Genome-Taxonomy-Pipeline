@@ -19,7 +19,7 @@ proteines divergentes (40-50 % d'identite), ce qui sous-estime le POCP pres
 du seuil de genre. Le mode ultra-sensible est le plus proche de BLASTP.
 
 USAGE :
-    python pocp.py <dossier_proteines> <dossier_sortie>
+    python pocp.py <dossier_proteines> <dossier_sortie> [threads]
         <dossier_proteines> : contient un fichier .faa par genome (proteines).
         <dossier_sortie>    : sera cree ; contiendra la matrice POCP.
 ============================================================================
@@ -28,12 +28,13 @@ USAGE :
 import os, sys, glob, subprocess, itertools, csv
 
 # ----- 0) Lire les arguments de la ligne de commande -----
-if len(sys.argv) != 3:
-    print("Usage : python pocp.py <dossier_proteines> <dossier_sortie>")
+if len(sys.argv) not in (3, 4):
+    print("Usage : python pocp.py <dossier_proteines> <dossier_sortie> [threads]")
     sys.exit(1)
 
 prot_dir = sys.argv[1]                 # ou sont les .faa
 out_dir  = sys.argv[2]                 # ou ecrire les resultats
+threads = sys.argv[3] if len(sys.argv) == 4 else "4"   # threads pour DIAMOND
 db_dir   = os.path.join(out_dir, "dbs")         # bases DIAMOND
 aln_dir  = os.path.join(out_dir, "alignements")  # resultats bruts diamond
 for d in (out_dir, db_dir, aln_dir):
@@ -67,7 +68,8 @@ def conserved(query_name, subject_name):
         "-d", os.path.join(db_dir, subject_name),
         "-o", out_tsv,
         "--outfmt", "6", "qseqid", "sseqid", "pident", "length", "qlen",
-        "--evalue", "1e-5", "--max-target-seqs", "1", "--ultra-sensitive", "--quiet"
+        "--evalue", "1e-5", "--max-target-seqs", "1", "--ultra-sensitive",
+        "--threads", threads, "--quiet"
     ], check=True)
     conserved_ids = set()
     with open(out_tsv) as fh:
