@@ -1,0 +1,23 @@
+# Runs on every push and pull request: syntax of every script and the unit tests that need no
+# bioinformatics tool (tree rooting, genome checks, run history, pairwise summary).
+name: tests
+on: [push, pull_request]
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Python syntax
+        run: python -m py_compile scripts/*.py webapp/backend/*.py validation/*/*.py tests/*.py
+      - name: JavaScript syntax
+        run: for f in webapp/frontend/js/*.js; do node --check "$f"; done
+      - name: Unit tests
+        run: |
+          python tests/test_root_tree.py
+          python tests/test_pipeline_inputs.py
