@@ -1,5 +1,6 @@
 # job_manager.py - runs pipeline_web.py as a background subprocess per job,
 # one job at a time (a queue), and keeps track of progress/log/status in memory.
+import json
 import os
 import queue
 import signal
@@ -9,7 +10,9 @@ import threading
 from pathlib import Path
 
 ALLOWED_EXTENSIONS = {".fas", ".fasta", ".fna"}
-MIN_GENOMES = 5
+MIN_GENOMES = 2          # pairwise comparisons need two genomes...
+MIN_GENOMES_TREE = 5     # ...and EasyCGTree cannot build a tree with fewer than five
+THREADS = os.cpu_count() or 4
 TOTAL_STEPS = 9
 STEP_KEYS = ["qc", "checkm2", "proteines", "ani", "dddh", "aai", "pocp", "arbre", "figures"]
 
@@ -49,20 +52,36 @@ class JobManager:
             return dict(job) if job else None
 
     def _from_disk(self, job_id: str):
-        """Jobs live in memory, so a restart forgets them. A job whose folder still holds results is
-        reported as done (it is no longer running), so its results stay viewable after a restart."""
+        """Jobs live in memory, so a restart forgets them. Their outcome is also written to status.json in the
+        job folder (see _mark), so after a restart a finished job keeps its results, a failed one stays failed,
+        and one that was running when the server stopped is reported as interrupted."""
         if not job_id.isalnum():
             return None
         job_dir = self.jobs_dir / job_id
         results = job_dir / "results"
-        if not results.is_dir() or not any(results.iterdir()):
-            return None
+        marker = job_dir / "status.json"
         n_genomes = sum(1 for f in (job_dir / "genomes").iterdir()
                         if f.suffix.lower() in ALLOWED_EXTENSIONS) if (job_dir / "genomes").is_dir() else None
-        job = {"status": "done", "step": TOTAL_STEPS, "total": TOTAL_STEPS, "label": "Completed",
-               "log": [], "error": None, "n_genomes": n_genomes, "steps": "all"}
+        job = {"step": TOTAL_STEPS, "total": TOTAL_STEPS, "log": [], "error": None,
+               "n_genomes": n_genomes, "steps": "all"}
+        if marker.exists():
+            saved = json.loads(marker.read_text())
+            job.update(steps=saved.get("steps", "all"), error=saved.get("error"))
+            status = saved.get("status")
+            if status in ("queued", "running"):
+                status = "error"
+                job["error"] = "The run was interrupted because the server stopped. Start the analysis again."
+            job.update(status=status, label={"done": "Completed", "cancelled": "Cancelled"}.get(status, "Failed"))
+        elif results.is_dir() and any(results.iterdir()):
+            job.update(status="done", label="Completed")      # job run before status.json existed
+        else:
+            return None
         self.jobs[job_id] = job
         return job
+
+    def _mark(self, job_dir: Path, status: str, steps: str, error=None):
+        """Write the job's outcome next to its results, so it survives a server restart."""
+        (job_dir / "status.json").write_text(json.dumps({"status": status, "steps": steps, "error": error}))
 
     def cancel(self, job_id: str) -> bool:
         """Cancel a queued or running job. Returns False if the job is
@@ -110,12 +129,13 @@ class JobManager:
 
     def _run_job(self, job_id: str, job_dir: Path, steps: str):
         self._update(job_id, status="running", label="Starting...")
+        self._mark(job_dir, "running", steps)
         genomes_dir = job_dir / "genomes"
         cmd = [sys.executable, "-u", str(SCRIPT),
                "--genomes-dir", str(genomes_dir),
                "--output-dir", str(job_dir),
                "--job-id", job_id,
-               "--threads", "4",
+               "--threads", str(THREADS),
                "--steps", steps]
         try:
             # start_new_session=True puts the process (and every tool it
@@ -152,3 +172,6 @@ class JobManager:
                              error=current_error or "The pipeline failed. See the log for details.")
         except Exception as exc:
             self._update(job_id, status="error", label="Failed", error=str(exc))
+        with self.lock:
+            final = dict(self.jobs[job_id])
+        self._mark(job_dir, final["status"], steps, final.get("error"))

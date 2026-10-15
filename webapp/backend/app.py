@@ -1,6 +1,7 @@
 # app.py - FastAPI backend for the Genome Taxonomy Explorer web interface.
 # Wraps the existing pipeline (via pipeline_web.py) with subprocess calls,
 # it does not reimplement any bioinformatics logic.
+import re
 import shutil
 import uuid
 from pathlib import Path
@@ -10,7 +11,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from job_manager import ALLOWED_EXTENSIONS, MIN_GENOMES, STEP_KEYS, JobManager
+from job_manager import ALLOWED_EXTENSIONS, MIN_GENOMES, MIN_GENOMES_TREE, STEP_KEYS, JobManager
 
 BASE_DIR = Path(__file__).resolve().parent.parent      # ~/stage/webapp
 JOBS_DIR = BASE_DIR / "jobs"
@@ -45,12 +46,6 @@ def job_dir_or_404(job_id: str) -> Path:
 
 @app.post("/api/jobs")
 async def create_job(files: List[UploadFile] = File(...), steps: str = Form("all")):
-    if len(files) < MIN_GENOMES:
-        raise HTTPException(
-            400,
-            f"Please upload at least {MIN_GENOMES} genome files. The phylogenomic "
-            f"tree step (EasyCGTree) cannot run with fewer. You uploaded {len(files)}.",
-        )
     bad = [f.filename for f in files if Path(f.filename).suffix.lower() not in ALLOWED_EXTENSIONS]
     if bad:
         raise HTTPException(
@@ -68,15 +63,47 @@ async def create_job(files: List[UploadFile] = File(...), steps: str = Form("all
                 f"Invalid steps selection: {steps!r}. Choose at least one of: "
                 + ", ".join(STEP_KEYS) + " (or 'all').",
             )
+    with_tree = steps == "all" or "arbre" in steps.split(",")
+    minimum = MIN_GENOMES_TREE if with_tree else MIN_GENOMES
+    if len(files) < minimum:
+        raise HTTPException(
+            400,
+            f"Please upload at least {minimum} genome files"
+            + (" (the phylogenomic tree cannot be built with fewer)" if with_tree else "")
+            + f". You uploaded {len(files)}.",
+        )
+
+    # The file name becomes the genome's name in every table and in the tree (Newick), where spaces, commas,
+    # parentheses and colons have a meaning: keep letters, digits, '.', '_' and '-', and a lower-case extension.
+    names = {}
+    for f in files:
+        path = Path(f.filename)
+        stem = re.sub(r"[^A-Za-z0-9._-]+", "_", path.stem).strip("._") or "genome"
+        names.setdefault(stem.lower(), []).append((f, stem + path.suffix.lower()))
+    clashes = [" / ".join(f.filename for f, _ in group) for group in names.values() if len(group) > 1]
+    if clashes:
+        raise HTTPException(400, "These files would get the same genome name, rename one of each: "
+                                 + "; ".join(clashes) + ".")
 
     job_id = uuid.uuid4().hex[:10]
     job_dir = JOBS_DIR / job_id
     genomes_dir = job_dir / "genomes"
     genomes_dir.mkdir(parents=True)
-    for f in files:
-        dest = genomes_dir / Path(f.filename).name
+    problems = []
+    for group in names.values():
+        f, safe_name = group[0]
+        dest = genomes_dir / safe_name
         with open(dest, "wb") as out:
             shutil.copyfileobj(f.file, out)
+        with open(dest, "rb") as fh:
+            start = fh.read(4096).lstrip()
+        if not start:
+            problems.append(f"{f.filename} is empty")
+        elif not start.startswith(b">"):
+            problems.append(f"{f.filename} is not a FASTA file (it should start with '>')")
+    if problems:
+        shutil.rmtree(job_dir, ignore_errors=True)
+        raise HTTPException(400, "; ".join(problems) + ".")
 
     manager.submit(job_id, job_dir, len(files), steps)
     return {"job_id": job_id}
