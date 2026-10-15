@@ -151,7 +151,7 @@ disponibles (`--threads`).
 
 | # | Étape | Outil et paramètres | Sorties (`results/`) |
 |---|---|---|---|
-| 1 | **Contrôle qualité** | script Python : taille, %GC, nombre de contigs | `qc.txt` |
+| 1 | **Contrôle qualité** | script Python : taille, %GC (sur A/C/G/T), nombre de contigs, N50 | `qc.txt` |
 | 2 | **Complétude / contamination** | CheckM2 `predict`, 4 threads, environnement `checkm2env` | colonnes ajoutées à `qc.txt` |
 | 3 | **Prédiction des protéines** | Prodigal `-q` | `proteins/<génome>.faa` |
 | 4 | **ANI** | FastANI tous contre tous (`--ql`/`--rl`), `--threads` | `ani_resultats.txt` (ANI, fragments alignés, fragments totaux) |
@@ -160,6 +160,7 @@ disponibles (`--threads`).
 | 7 | **POCP** | `pocp.py` : DIAMOND `blastp --ultra-sensitive` (§ 6.2) | `pocp_out/pocp_matrice.tsv` |
 | 8 | **Arbre phylogénomique** | EasyCGTree `-hmm bac120 -tree sm -tree_app fasttree`, puis `root_tree.py` (§ 6.3) | `arbre.tree` (enraciné), `arbre_non_enracine.tree` |
 | 9 | **Figures** | `plot_all_web.R` | `heatmap_ani.png`, `heatmap_dddh.png`, `heatmap_aai.png`, `heatmap_pocp.png`, `tree.png` |
+| — | **À chaque run** | synthèse et traçabilité | `synthese_paires.tsv` (une ligne par paire : ANI et fraction alignée, dDDH, AAI, POCP, verdicts espèce et genre), `versions.txt` (date, commande, commit, version de chaque outil) |
 
 **Figures (étape 9).** Les heatmaps utilisent une échelle divergente coupée exactement au seuil : bleu de Prusse du
 côté « même taxon », terre d'ombre de l'autre. Les génomes sont ordonnés selon l'arbre, ou par regroupement UPGMA à
@@ -433,6 +434,7 @@ cd webapp/backend && uvicorn app:app --host 127.0.0.1 --port 8000
 
 ```bash
 python tests/test_root_tree.py
+python tests/test_pipeline_inputs.py
 python validation/dddh/validate_dddh.py
 python validation/pocp/compare_engines.py A.faa B.faa
 ```
@@ -456,10 +458,11 @@ demande environ 6 Go de RAM.
 ├── webapp/
 │   ├── backend/             # app.py (API), job_manager.py (file d'attente)
 │   └── frontend/            # index.html, css/, js/ (app.js, plates.js), fonts/, icons/, img/, vendor/ (GSAP)
-├── tests/test_root_tree.py
+├── tests/                 # tests unitaires, relancés à chaque push (GitHub Actions)
 ├── validation/              # dddh/ (jeu de référence, rapport), pocp/ (comparaison des moteurs)
 ├── branding/tga/            # kit du logo
-├── stage_environment.yml
+├── stage_environment.yml   # environnement conda, versions figées
+├── CITATION.cff
 ├── tga-pipeline-flowchart.png
 └── README.md
 ```
@@ -480,31 +483,26 @@ validation sont générés localement et exclus de git.
 - **POCP** : la comparaison avec BLASTP porte sur 2 paires, aucune proche du seuil de 50 %.
 - **Arbre** : FastTree fournit des supports SH-like locaux. Pour une publication, IQ-TREE avec bootstrap serait plus
   solide.
-- **QC** : pas de N50, et pas de seuil bloquant pour les génomes fragmentés ou contaminés.
-- **Synthèse** : il manque un tableau qui réunisse ANI, dDDH, AAI, POCP et le verdict, paire par paire.
+- **QC** : pas de seuil bloquant pour les génomes fragmentés ou contaminés ; le N50 et CheckM2 les signalent.
 - **Étude *B. ndiopicus*** : à relancer avec la version actuelle (§ 9.2).
 
 ### Logiciel
-- **Versions** : l'environnement conda ne fixe pas les versions et liste des paquets non utilisés (streamlit, seaborn,
-  matplotlib, pandas, numpy, openpyxl, pheatmap, treeio).
 - **Installation** : elle se fait en trois parties (deux environnements conda et EasyCGTree4 à la main). Un
   `Dockerfile` ou un script d'installation la simplifierait.
-- **Versions des outils** : elles ne sont pas enregistrées dans les dossiers de résultats.
-- **Scripts obsolètes** : `etape_ani.py`, `plot_ani.R`, `plot_aai.R`, `plot_pocp.R` et `plot_tree.R` contiennent des
-  chemins en dur et sont à supprimer.
 - **Langue** : le français et l'anglais sont mélangés dans les noms de fonctions et de fichiers de sortie.
 - **Passage à l'échelle** : dDDH et POCP traitent les paires une par une. 50 génomes font 1 225 paires.
 - **Interface** : pas de limite de taille à l'envoi, et les jobs ne sont jamais nettoyés. C'est acceptable en local,
   mais pas pour un déploiement public.
 - **Vérification des génomes** : elle contrôle le format, pas la qualité biologique. Un génome très fragmenté ou
   contaminé passe ; il est seulement signalé dans le registre (CheckM2).
-- **Tests** : seul l'enracinement est testé, et il n'y a pas d'intégration continue.
-- **Nom** : il n'est pas encore unifié (« Genome-Taxonomy-Pipeline », « Genome Taxonomy Explorer » dans l'API, « Taxo
-  Genomics Analyses » dans l'interface).
+- **Tests** : 13 tests unitaires relancés à chaque push, mais aucun test automatique ne fait tourner les outils
+  bioinformatiques ; ce rôle revient à la validation (§ 10).
+- **Nom** : le dépôt s'appelle encore « Genome-Taxonomy-Pipeline » ; l'interface et l'API disent « TGA — Taxo Genomics
+  Analyses ».
 
 ### Publication
 - **Licence** : `LICENSE` manque.
-- **Citation** : il faut un `CITATION.cff`, une version `v1.0.0` et un DOI Zenodo.
+- **Citation** : `CITATION.cff` est en place ; il manque une version `v1.0.0` et un DOI Zenodo.
 - **Données d'exemple** : un jeu d'exemple avec les résultats attendus.
 - **Positionnement** : un « statement of need » face à TYGS, GTDB-Tk, pyANI et POCP-nf.
 - **Revue cible** : JOSS (logiciel), ou une note d'application dans *Bioinformatics* ou *BMC Bioinformatics*.

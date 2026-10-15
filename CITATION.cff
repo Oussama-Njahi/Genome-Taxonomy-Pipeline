@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+message: "If you use TGA in your work, please cite it as below."
+title: "TGA - Taxo Genomics Analyses: an integrated pipeline for genome-based bacterial taxonomy"
+abstract: >-
+  TGA takes a folder of bacterial genome assemblies and, in one local run, computes genome quality
+  (size, GC, N50, CheckM2), species delineation (ANI with FastANI, dDDH with GBDP formula 2), genus
+  delineation (AAI with EzAAI, POCP with DIAMOND) and a rooted phylogenomic tree on the 120 bac120
+  marker genes (EasyCGTree, FastTree), with figures and a local web interface.
+authors:
+  - family-names: Njahi
+    given-names: Oussama
+    affiliation: "Institut des Régions Arides (IRA), Médenine, Tunisia"
+repository-code: "https://github.com/Oussama-Njahi/Genome-Taxonomy-Pipeline"
+keywords:
+  - bacterial taxonomy
+  - average nucleotide identity
+  - digital DNA-DNA hybridization
+  - average amino acid identity
+  - percentage of conserved proteins
+  - phylogenomics

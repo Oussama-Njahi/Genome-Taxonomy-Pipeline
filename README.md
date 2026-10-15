@@ -63,10 +63,12 @@ mamba env create -f stage_environment.yml
 conda activate stage
 ```
 
+The versions in `stage_environment.yml` are pinned to the ones the pipeline was developed and validated with.
+
 CheckM2 requires a separate environment due to a TensorFlow/Python version conflict:
 
 ```bash
-mamba create -n checkm2env -y -c conda-forge -c bioconda python=3.12 checkm2
+mamba create -n checkm2env -y -c conda-forge -c bioconda python=3.12 checkm2=1.1.0
 ```
 
 EasyCGTree4 is not distributed via conda and must be installed manually — see [its repository](https://github.com/zdf1987/EasyCGTree4) for instructions (clone, unzip the Linux release and HMM profile parts, place the `.hmm` files in `EasyCGTree4/EasyCGTree.v4.2-Linux/HMM/`, `chmod +x` the `bin/` folder, and install the system package `libgomp1`).
@@ -80,6 +82,13 @@ python scripts/pipeline.py
 ```
 
 Results (quality report, ANI/dDDH/AAI/POCP matrices, tree, figures) are written to `results/`, predicted proteins to `proteins/`. `--steps` works as described above; `--threads` defaults to all CPUs.
+
+Every run also writes, whatever the steps:
+
+- `results/synthese_paires.tsv`: one line per pair of genomes with ANI (and its aligned fraction), dDDH, AAI and POCP, and the species and genus calls (`conflict` when the two criteria of a rank disagree);
+- `results/versions.txt`: the date, the command, the pipeline's git commit and the version of every tool used, to report or reproduce a run.
+
+The quality report (`qc.txt`) gives size, GC % (over A/C/G/T only), number of contigs and N50, plus completeness and contamination when CheckM2 is run.
 
 Before any step, every genome is checked: it must be a non-empty DNA FASTA file, and its name (the file name without the extension) may only contain letters, digits, `.`, `_` and `-`, because it becomes the genome's label in every table and in the tree. Two files may not give the same name. The run stops with a message naming the file otherwise.
 
@@ -119,11 +128,24 @@ Then open `http://127.0.0.1:8000`. Upload at least 2 genome assemblies (`.fas`, 
 ├── webapp/
 │   ├── backend/          # FastAPI server (app.py, job_manager.py)
 │   └── frontend/         # upload form + results UI (HTML/CSS/JS, no build step)
-├── stage_environment.yml # reproducible conda environment
+├── tests/                # unit tests (python tests/test_*.py), run on every push by GitHub Actions
+├── validation/           # dDDH against reference pairs, POCP with DIAMOND against BLASTP
+├── branding/tga/         # logo kit
+├── stage_environment.yml # conda environment, pinned versions
+├── CITATION.cff          # how to cite the pipeline
 └── README.md
 ```
 
-*(The `genomes/`, `proteins/`, `results/` and `logs/` folders are generated locally and excluded from version control — see `.gitignore`.)*
+*(The `genomes/`, `proteins/`, `results/`, `previous_runs/` and `logs/` folders are generated locally and excluded from version control — see `.gitignore`.)*
+
+## Tests
+
+```bash
+python tests/test_root_tree.py        # tree rooting
+python tests/test_pipeline_inputs.py  # genome checks, N50, run history, pairwise summary
+```
+
+They need no bioinformatics tool and run on every push (`.github/workflows/tests.yml`). The scientific validation is in `validation/` (see its README).
 
 ## Roadmap
 
