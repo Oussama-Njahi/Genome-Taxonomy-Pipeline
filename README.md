@@ -48,6 +48,8 @@ On a 14-genome test set (*Bhargavaea*, *Candidatus Kurthia*, *Caryophanon*, plus
 
 `scripts/dddh.py` implements the method of Auch et al. (2010), Table 4, "NCBI BLAST / Trimming (2)": GBDP formula 2 (identities within HSPs / total HSP length), greedy-with-trimming, linear conversion `DDH ≈ 90.3998 − 438.3134 × d` and species threshold `d > 0.0412` (≈ <70% DDH). Since version 2.0, the [GGDC](https://ggdc.dsmz.de) web service (Meier-Kolthoff et al. 2013) converts distances with a logistic model (GLM) and uses other settings (BLAST+ with word length 38, "coverage" algorithm); the coefficients of that model are not published in the article. The pipeline's values are therefore **not directly comparable** with those of today's GGDC, especially far from the threshold, which is why the figures show the distance rather than the estimated %DDH. To validate a conclusion, submit the genome pairs whose distance is close to 0.0412 to GGDC and compare the same-species / different-species decisions.
 
+The distance threshold and the conversion line are two separate results of Auch et al.'s Table 4: the threshold (0.0412) is the distance that best separates pairs around 70% DDH (error ratio 4.3%), while the line comes from a robust regression over all pairs. They do not meet exactly: at d = 0.0412 the line gives 72.3%, and 70% would correspond to d = 0.0465. As the paper recommends, the species decision uses the distance threshold; the percentage is only an estimate. The line is calibrated near the threshold and would fall below 0% for distant species, so the estimate is bounded to 0–100%.
+
 ## Requirements
 
 - Linux (tested on Ubuntu via WSL2)
