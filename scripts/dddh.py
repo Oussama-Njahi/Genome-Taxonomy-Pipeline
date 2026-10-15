@@ -73,7 +73,7 @@ References :
   functions." BMC Bioinformatics 14:60.
 
 USAGE :
-    python dddh.py <dossier_genomes> <dossier_sortie>
+    python dddh.py <dossier_genomes> <dossier_sortie> [threads]
         <dossier_genomes> : contient un fichier .fas/.fasta/.fna par genome.
         <dossier_sortie>  : sera cree ; contiendra les matrices dDDH.
 ============================================================================
@@ -82,12 +82,13 @@ USAGE :
 import os, sys, glob, subprocess, itertools, csv
 
 # ----- 0) Lire les arguments de la ligne de commande -----
-if len(sys.argv) != 3:
-    print("Usage : python dddh.py <dossier_genomes> <dossier_sortie>")
+if len(sys.argv) not in (3, 4):
+    print("Usage : python dddh.py <dossier_genomes> <dossier_sortie> [threads]")
     sys.exit(1)
 
 genomes_dir = sys.argv[1]
 out_dir = sys.argv[2]
+threads = sys.argv[3] if len(sys.argv) == 4 else "4"   # threads pour BLAST
 db_dir = os.path.join(out_dir, "dbs")
 aln_dir = os.path.join(out_dir, "alignements")
 for d in (out_dir, db_dir, aln_dir):
@@ -131,7 +132,7 @@ def hsps_diriges(query_name, subject_name):
         "-outfmt", "6 qseqid qstart qend length pident",
         "-evalue", str(EVALUE_MAX),
         "-max_target_seqs", "100000",
-        "-num_threads", "4",
+        "-num_threads", threads,
     ], check=True)
     hsps = []
     with open(out_tsv) as fh:

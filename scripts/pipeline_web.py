@@ -15,10 +15,13 @@
 
 import argparse
 import glob
+import hashlib
 import os
+import re
 import shutil
 import subprocess
 import sys
+import time
 import uuid
 
 STEPS = [
@@ -35,6 +38,16 @@ STEPS = [
 
 # Cles utilisees avec --steps, dans le meme ordre que STEPS ci-dessus
 STEPS_KEYS = ["qc", "checkm2", "proteines", "ani", "dddh", "aai", "pocp", "arbre", "figures"]
+
+# Genomes en entree : extensions acceptees (sans tenir compte de la casse), nombre minimum (l'arbre d'EasyCGTree
+# en demande 5, les comparaisons par paires 2), caracteres permis dans un nom (un nom sert d'etiquette dans l'arbre
+# Newick, ou parentheses, virgules, deux-points et espaces ont un sens), lettres d'ADN permises (code IUPAC).
+EXTENSIONS = (".fas", ".fasta", ".fna")
+MIN_GENOMES = 2
+MIN_GENOMES_ARBRE = 5
+NOM_PERMIS = re.compile(r"^[A-Za-z0-9._-]+$")
+IUPAC = set("ACGTURYSWKMBDHVN-")
+TAILLE_SUSPECTE = 500000        # en dessous, prevenir : un genome bacterien fait rarement moins de 0.5 Mb
 
 SCRIPTS = os.path.dirname(os.path.abspath(__file__))
 BASE = os.path.dirname(SCRIPTS)
@@ -80,20 +93,103 @@ def etapes_demandees(steps_arg):
     return choisies
 
 
-def lister_genomes(genomes_dir):
-    """Toujours necessaire : trouve les genomes et verifie qu'il y en a assez.
-    Rapide (juste un glob + un comptage) -> peut rester obligatoire sans cout."""
-    fichiers = sorted(glob.glob(genomes_dir + "/*.fas") +
-                       glob.glob(genomes_dir + "/*.fasta") +
-                       glob.glob(genomes_dir + "/*.fna"))
+def lire_fasta(chemin):
+    """Verifie qu'un fichier est bien un FASTA d'ADN et renvoie ses statistiques :
+    (longueur totale, nombre de G+C, nombre de A/C/G/T, nombre de sequences, empreinte SHA-1)."""
+    nom = os.path.basename(chemin)
+    empreinte = hashlib.sha1()
+    total = gc = acgt = sequences = 0
+    vu_entete = False
+    with open(chemin, "rb") as fh:
+        for numero, brut in enumerate(fh, 1):
+            empreinte.update(brut)
+            ligne = brut.decode("ascii", "replace").strip()
+            if not ligne:
+                continue
+            if ligne.startswith(">"):
+                vu_entete = True
+                sequences += 1
+                continue
+            if not vu_entete:
+                fail("%s is not a FASTA file: its first line should start with '>'" % nom)
+            ligne = ligne.upper()
+            inconnues = set(ligne) - IUPAC
+            if inconnues:
+                fail("%s, line %d: characters that are not DNA (%s) - is it really a genome assembly?"
+                     % (nom, numero, "".join(sorted(inconnues))[:10]))
+            total += len(ligne)
+            gc += ligne.count("G") + ligne.count("C")
+            acgt += sum(ligne.count(b) for b in "ACGT")
+    if total == 0:
+        fail("%s contains no sequence (empty file or headers only)" % nom)
+    return total, gc, acgt, sequences, empreinte.hexdigest()
+
+
+def lister_genomes(genomes_dir, selection):
+    """Toujours necessaire : trouve les genomes (extension sans tenir compte de la casse), verifie que chacun est un
+    vrai FASTA d'ADN au nom utilisable, sans doublon, et qu'il y en a assez. Renvoie {nom: (chemin, stats)}."""
+    fichiers = sorted(f for f in glob.glob(genomes_dir + "/*") if os.path.splitext(f)[1].lower() in EXTENSIONS)
     if not fichiers:
         fail("no .fas/.fasta/.fna genome files found in %s" % genomes_dir)
-    if len(fichiers) < 5:
-        fail("at least 5 genomes are required (EasyCGTree cannot build a tree with fewer); got %d" % len(fichiers))
-    return fichiers
+    minimum = MIN_GENOMES_ARBRE if "arbre" in selection else MIN_GENOMES
+    if len(fichiers) < minimum:
+        if minimum == MIN_GENOMES_ARBRE:
+            fail("the phylogenomic tree needs at least %d genomes (EasyCGTree cannot build one with fewer); got %d. "
+                 "Add genomes, or leave out the 'arbre' step." % (minimum, len(fichiers)))
+        fail("at least %d genomes are needed to compare them; got %d" % (minimum, len(fichiers)))
+
+    genomes = {}
+    for chemin in fichiers:
+        nom = os.path.splitext(os.path.basename(chemin))[0]
+        if not NOM_PERMIS.match(nom):
+            fail("'%s': genome names may only contain letters, digits, '.', '_' and '-' (the name is used as a "
+                 "label in the tree file). Rename the file, e.g. '%s'"
+                 % (os.path.basename(chemin), re.sub(r"[^A-Za-z0-9._-]+", "_", nom).strip("._") or "genome"))
+        if nom.lower() in (n.lower() for n in genomes):
+            fail("two files give the same genome name '%s' (%s and %s): rename one of them"
+                 % (nom, os.path.basename(genomes[next(n for n in genomes if n.lower() == nom.lower())][0]),
+                    os.path.basename(chemin)))
+        genomes[nom] = (chemin, lire_fasta(chemin))
+        if genomes[nom][1][0] < TAILLE_SUSPECTE:
+            print("    !! WARNING: %s is only %d bp - is it a complete bacterial genome?"
+                  % (os.path.basename(chemin), genomes[nom][1][0]))
+    print("    %d genomes checked" % len(genomes))
+    return genomes
 
 
-def lire_checkm2(genomes_dir, results_dir, fichiers):
+def preparer_dossiers(genomes, output_dir, results_dir, proteins_dir):
+    """Les resultats d'une etape restent d'un run a l'autre (on peut lancer 'qc' puis 'checkm2' plus tard), mais
+    seulement pour LES MEMES genomes : sinon les figures melangeraient d'anciens resultats avec les nouveaux.
+    results/genomes.tsv note les genomes analyses ; s'ils ont change, les anciens results/ et proteins/ sont
+    deplaces dans previous_runs/<date>/. Les genomes sont ensuite exposes dans results/input_genomes/ sous des noms
+    uniformes (<nom>.fna), seule liste lue par les etapes."""
+    manifeste = results_dir + "/genomes.tsv"
+    actuel = "".join("%s\t%d\t%s\n" % (nom, stats[0], stats[4]) for nom, (_, stats) in sorted(genomes.items()))
+    ancien = open(manifeste).read() if os.path.exists(manifeste) else None
+    reste = [d for d in (results_dir, proteins_dir) if os.path.isdir(d) and os.listdir(d)]
+    if reste and ancien != actuel:
+        archive = os.path.join(output_dir, "previous_runs", time.strftime("%Y-%m-%d_%H%M%S"))
+        os.makedirs(archive, exist_ok=True)
+        for d in reste:
+            shutil.move(d, os.path.join(archive, os.path.basename(d)))
+        print("    !! The genomes differ from the previous run: its results were moved to %s" % archive)
+    os.makedirs(results_dir, exist_ok=True)
+    os.makedirs(proteins_dir, exist_ok=True)
+    with open(manifeste, "w") as fh:
+        fh.write(actuel)
+
+    entree = results_dir + "/input_genomes"
+    shutil.rmtree(entree, ignore_errors=True)
+    os.makedirs(entree)
+    fichiers = []
+    for nom, (chemin, _) in sorted(genomes.items()):
+        lien = os.path.join(entree, nom + ".fna")
+        os.symlink(os.path.abspath(chemin), lien)
+        fichiers.append(lien)
+    return entree, fichiers
+
+
+def lire_checkm2(results_dir, fichiers, threads):
     print("    (running CheckM2, this may take a few minutes...)")
 
     groupes = {}
@@ -113,7 +209,7 @@ def lire_checkm2(genomes_dir, results_dir, fichiers):
              "checkm2", "predict",
              "--input", sous_dossier,
              "--output-directory", sortie,
-             "-x", ext, "--threads", "4", "--force"])
+             "-x", ext, "--threads", str(threads), "--force"])
 
         rapport = sortie + "/quality_report.tsv"
         with open(rapport) as f:
@@ -126,39 +222,27 @@ def lire_checkm2(genomes_dir, results_dir, fichiers):
     return qualite
 
 
-def etape_qc(fichiers, results_dir):
-    """Stats de base uniquement (taille, GC%, contigs) - rapide, pas de CheckM2.
-    Completeness/Contamination sont ecrits a "NA" ; lancer aussi l'etape
+def etape_qc(genomes, results_dir):
+    """Stats de base uniquement (taille, GC%, contigs) - rapide, pas de CheckM2. Les statistiques viennent de la
+    verification des genomes (lire_fasta). Le %GC est calcule sur les seules bases A/C/G/T, pour que les N d'un
+    assemblage ne le fassent pas baisser. Completeness/Contamination sont ecrits a "NA" ; lancer aussi l'etape
     'checkm2' pour les remplir (voir etape_checkm2 ci-dessous)."""
     announce(1)
     with open(results_dir + "/qc.txt", "w") as rapport:
         rapport.write("Genome\tTaille(pb)\tGC(%)\tContigs\tCompleteness(%)\tContamination(%)\n")
-        for chemin in fichiers:
-            seqs = []
-            seq = ""
-            for ligne in open(chemin):
-                if ligne.startswith(">"):
-                    if seq:
-                        seqs.append(seq)
-                    seq = ""
-                else:
-                    seq += ligne.strip()
-            if seq:
-                seqs.append(seq)
-            total = sum(len(s) for s in seqs)
-            gc = sum(s.upper().count("G") + s.upper().count("C") for s in seqs)
-            nom = os.path.splitext(os.path.basename(chemin))[0]
-            rapport.write("%s\t%d\t%.1f\t%d\tNA\tNA\n" % (nom, total, 100 * gc / total, len(seqs)))
+        for nom, (_, (total, gc, acgt, sequences, _)) in sorted(genomes.items()):
+            taux = "%.1f" % (100.0 * gc / acgt) if acgt else "NA"
+            rapport.write("%s\t%d\t%s\t%d\tNA\tNA\n" % (nom, total, taux, sequences))
     print("    -> qc.txt created (Completeness/Contamination = NA; also run 'checkm2' step to fill them in)")
 
 
-def etape_checkm2(genomes_dir, results_dir, fichiers):
+def etape_checkm2(results_dir, fichiers, threads):
     """Lance CheckM2 et met a jour les colonnes Completeness/Contamination
     de qc.txt (qui doit deja exister, ecrit par l'etape 'qc' - verifie par
     l'appelant dans main(), comme pour la dependance proteines -> pocp)."""
     announce(2)
     qc_path = results_dir + "/qc.txt"
-    qualite = lire_checkm2(genomes_dir, results_dir, fichiers)
+    qualite = lire_checkm2(results_dir, fichiers, threads)
     with open(qc_path) as f:
         lignes = f.readlines()
     nouvelles_lignes = [lignes[0]]
@@ -192,13 +276,13 @@ def etape_ani(fichiers, results_dir, threads):
     print("    -> ani_resultats.txt created")
 
 
-def etape_dddh(genomes_dir, results_dir):
+def etape_dddh(genomes_dir, results_dir, threads):
     announce(5)
-    run(["python", SCRIPTS + "/dddh.py", genomes_dir, results_dir + "/dddh_out"])
+    run(["python", SCRIPTS + "/dddh.py", genomes_dir, results_dir + "/dddh_out", str(threads)])
     print("    -> dddh_out/dddh_distance.tsv and dddh_similarite.tsv created")
 
 
-def etape_aai(fichiers, results_dir):
+def etape_aai(fichiers, results_dir, threads):
     announce(6)
     aai_db = results_dir + "/aai_db"
     os.makedirs(aai_db, exist_ok=True)
@@ -206,13 +290,13 @@ def etape_aai(fichiers, results_dir):
         nom = os.path.splitext(os.path.basename(chemin))[0]
         run(["EzAAI", "extract", "-i", chemin, "-o", aai_db + "/" + nom + ".db", "-l", nom])
     run(["EzAAI", "calculate", "-i", aai_db, "-j", aai_db,
-         "-o", results_dir + "/aai_resultats.tsv"])
+         "-o", results_dir + "/aai_resultats.tsv", "-t", str(threads)])
     print("    -> aai_resultats.tsv created")
 
 
-def etape_pocp(proteins_dir, results_dir):
+def etape_pocp(proteins_dir, results_dir, threads):
     announce(7)
-    run(["python", SCRIPTS + "/pocp.py", proteins_dir, results_dir + "/pocp_out"])
+    run(["python", SCRIPTS + "/pocp.py", proteins_dir, results_dir + "/pocp_out", str(threads)])
     print("    -> pocp_out/pocp_matrice.tsv created")
 
 
@@ -268,7 +352,8 @@ def main():
     parser.add_argument("--genomes-dir", required=True, help="Folder containing the genome files")
     parser.add_argument("--output-dir", required=True, help="Folder where proteins/ and results/ will be created")
     parser.add_argument("--job-id", default=None, help="Unique id for this run (default: random uuid)")
-    parser.add_argument("--threads", type=int, default=4, help="Threads for fastANI/EasyCGTree")
+    parser.add_argument("--threads", type=int, default=os.cpu_count() or 4,
+                         help="Threads for the tools that can use several (default: all CPUs, %(default)s here)")
     parser.add_argument("--steps", type=str, default="all",
                          help="Comma-separated steps to run (" + ", ".join(STEPS_KEYS) + "). Default: all")
     parser.add_argument("--outgroup", type=str, default=None,
@@ -284,38 +369,37 @@ def main():
     genomes_dir = os.path.abspath(args.genomes_dir)
     proteins_dir = os.path.abspath(args.output_dir) + "/proteins"
     results_dir = os.path.abspath(args.output_dir) + "/results"
-    os.makedirs(proteins_dir, exist_ok=True)
-    os.makedirs(results_dir, exist_ok=True)
 
     print("===== PIPELINE START (job %s) =====" % job_id)
     print("Steps selected: %s" % ", ".join(selection))
 
-    fichiers = lister_genomes(genomes_dir)   # toujours necessaire, rapide
+    genomes = lister_genomes(genomes_dir, selection)   # toujours necessaire, rapide
+    genomes_dir, fichiers = preparer_dossiers(genomes, os.path.abspath(args.output_dir), results_dir, proteins_dir)
 
     if "qc" in selection:
-        etape_qc(fichiers, results_dir)
+        etape_qc(genomes, results_dir)
     if "checkm2" in selection:
         if not os.path.exists(results_dir + "/qc.txt"):
             print("    !! WARNING: qc.txt not found in %s" % results_dir)
             print("    !! The 'qc' step must be run at least once before 'checkm2'.")
             print("    !! Re-run with --steps qc,checkm2")
         else:
-            etape_checkm2(genomes_dir, results_dir, fichiers)
+            etape_checkm2(results_dir, fichiers, args.threads)
     if "proteines" in selection:
         etape_proteines(fichiers, proteins_dir)
     if "ani" in selection:
         etape_ani(fichiers, results_dir, args.threads)
     if "dddh" in selection:
-        etape_dddh(genomes_dir, results_dir)
+        etape_dddh(genomes_dir, results_dir, args.threads)
     if "aai" in selection:
-        etape_aai(fichiers, results_dir)
+        etape_aai(fichiers, results_dir, args.threads)
     if "pocp" in selection:
         if not os.path.isdir(proteins_dir) or not glob.glob(proteins_dir + "/*.faa"):
             print("    !! WARNING: no protein files found in %s" % proteins_dir)
             print("    !! The 'proteines' step must be run at least once before POCP.")
             print("    !! Re-run with --steps proteines,pocp")
         else:
-            etape_pocp(proteins_dir, results_dir)
+            etape_pocp(proteins_dir, results_dir, args.threads)
     if "arbre" in selection:
         etape_arbre(fichiers, results_dir, job_id, args.threads, args.outgroup)
     if "figures" in selection:
