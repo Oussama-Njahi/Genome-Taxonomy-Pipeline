@@ -243,6 +243,8 @@ groupe externe comme frère d'un génome étudié : *S. aureus* sortait frère d
 - **Supports conservés** : les valeurs de support sont stockées sur les branches, pas sur les nœuds, pour rester sur la
   bonne bipartition quand la racine change de place.
 - **Arbre brut gardé** : l'arbre non enraciné reste disponible.
+- **Noms des feuilles** : EasyCGTree renomme ses fichiers d'entrée (les `_` et les espaces deviennent `-`). Le
+  pipeline redonne aux feuilles les noms des génomes, pour que l'arbre corresponde aux matrices.
 - **Tests** : 5 tests automatiques (`tests/test_root_tree.py`) vérifient que les distances entre feuilles et les
   supports sont conservés, couvrent le groupe externe et l'arbre déjà enraciné, et testent les messages d'erreur.
 
