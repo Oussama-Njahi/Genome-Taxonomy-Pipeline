@@ -1,37 +1,33 @@
+# Environment of the TGA pipeline (main tools, web interface, figures).
+# Versions are pinned to the ones the pipeline was developed and validated with.
+# CheckM2 needs its own environment (TensorFlow/Python conflict), see the README:
+#   mamba create -n checkm2env -c conda-forge -c bioconda python=3.12 checkm2=1.1.0
+# EasyCGTree4 is installed by hand (not on conda) and brings its own HMMER, MUSCLE, trimAl and FastTree.
 name: stage
 channels:
   - conda-forge
   - bioconda
 dependencies:
-  - fastani
-  - ezaai
-  - prodigal
-  - diamond
-  - blast
-  - checkm-genome
-  - hmmer
-  - mafft
-  - muscle
-  - fasttree
-  - iqtree
-  - python>=3.10
-  - pandas
-  - numpy
-  - matplotlib
-  - seaborn
-  - openpyxl
-  - biopython
-  - streamlit
-  - fastapi
-  - uvicorn
-  - python-multipart
-  - r-base>=4.2
-  - r-ggplot2
-  - r-reshape2
-  - r-pheatmap
-  - r-ape
-  - bioconductor-ggtree
-  - bioconductor-treeio
+  # pipeline and web server
+  - python=3.14.7
+  - fastapi=0.141.1
+  - uvicorn=0.54.0
+  - python-multipart=0.0.32
+  # bioinformatics tools
+  - prodigal=2.6.3
+  - fastani=1.34
+  - blast=2.17.0
+  - diamond=2.2.8
+  - ezaai=1.2.4
+  # EasyCGTree4 is written in Perl
+  - perl=5.32.1
+  # figures
+  - r-base=4.5.3
+  - r-ggplot2=4.0.3
+  - r-reshape2=1.4.5
+  - r-ape=5.8_1
+  - bioconductor-ggtree=4.0.5
+  # used to download and unpack EasyCGTree4
   - git
   - unzip
   - wget
