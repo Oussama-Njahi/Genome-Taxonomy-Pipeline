@@ -1,0 +1,20 @@
+group	name	accession	organism
+bacillus_subtilis	Bacillus-subtilis-168	GCF_000009045.1	Bacillus subtilis subsp. subtilis str. 168
+bacillus_subtilis	Bacillus-subtilis-NCIB3610	GCF_002055965.1	Bacillus subtilis NCIB 3610
+bacillus_subtilis	Bacillus-spizizenii-TU-B-10	GCF_000227465.1	Bacillus spizizenii TU-B-10
+bacillus_subtilis	Bacillus-velezensis-FZB42	GCF_000015785.2	Bacillus velezensis FZB42
+bacillus_subtilis	Bacillus-amyloliquefaciens-DSM7	GCF_000196735.1	Bacillus amyloliquefaciens DSM 7
+bacillus_subtilis	Bacillus-licheniformis-ATCC14580	GCF_000011645.1	Bacillus licheniformis DSM 13 = ATCC 14580
+escherichia	Escherichia-coli-K12-MG1655	GCF_000005845.2	Escherichia coli str. K-12 substr. MG1655
+escherichia	Escherichia-coli-O157H7-Sakai	GCF_000008865.2	Escherichia coli O157:H7 str. Sakai
+escherichia	Shigella-flexneri-2a-301	GCF_000006925.2	Shigella flexneri 2a str. 301
+escherichia	Escherichia-fergusonii-ATCC35469	GCF_000026225.1	Escherichia fergusonii ATCC 35469
+escherichia	Escherichia-albertii-BIA5-2	GCF_028622335.1	Escherichia albertii BIA_5-2
+bacillus_cereus	Bacillus-cereus-ATCC14579	GCF_000007825.1	Bacillus cereus ATCC 14579
+bacillus_cereus	Bacillus-anthracis-Ames	GCF_000007845.1	Bacillus anthracis str. Ames
+bacillus_cereus	Bacillus-thuringiensis-97-27	GCF_000008505.1	[Bacillus thuringiensis] serovar konkukian str. 97-27
+bacillus_cereus	Bacillus-mycoides-KBAB4	GCF_000018825.1	Bacillus mycoides KBAB4
+klebsiella	Klebsiella-pneumoniae-HS11286	GCF_000240185.1	Klebsiella pneumoniae subsp. pneumoniae HS11286
+klebsiella	Klebsiella-variicola-At-22	GCF_000025465.1	Klebsiella variicola At-22
+klebsiella	Klebsiella-quasipneumoniae-FDAARGOS1503	GCF_020099175.1	Klebsiella quasipneumoniae FDAARGOS_1503
+klebsiella	Klebsiella-oxytoca-NCTC13727	GCF_900636985.1	Klebsiella oxytoca NCTC13727
