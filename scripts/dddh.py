@@ -29,10 +29,24 @@ Principe (pour chaque paire de genomes A et B) :
      deja couverte.
   4. d = 1 - (identites dans les HSP, 2 sens) / (longueur totale des
            HSP apres trimming, 2 sens)
-  5. similarite estimee (~%dDDH) = 90.3998 - 438.3134 * d
-     (coefficients publies, NCBI BLAST, formule 2)
+  5. similarite estimee (~%dDDH) = 90.3998 - 438.3134 * d, bornee a
+     [0, 100] (coefficients publies, NCBI BLAST, formule 2)
   6. Seuil espece : d > 0.0412  =>  especes differentes (analogue a
      <70 % DDH). d <= 0.0412 => meme espece.
+
+Seuil et conversion sont DEUX resultats distincts du tableau 4 d'Auch et
+al. (2010) : le seuil 0.0412 est la distance qui classe le mieux les paires
+autour de 70 % de DDH (taux d'erreur 4.3 %), la droite est une regression
+robuste sur toutes les paires. Ils ne coincident pas exactement : a
+d = 0.0412 la droite donne 72.3 %, et 70 % correspondrait a d = 0.0465.
+L'article recommande le SEUIL DE DISTANCE pour delimiter les especes ;
+c'est lui qui decide ici, le pourcentage n'est qu'une estimation. Cette
+droite n'est calibree que pres du seuil : loin de lui elle passerait sous
+0 % (jusqu'a -27 % entre especes eloignees du meme genre), d'ou la borne.
+
+Les autres reglages suivent l'article : BLASTN classique (mot de 11 nt,
+tableau 2), masquage des regions peu complexes pendant la recherche des
+amorces seulement (defaut de BLAST+), HSP d'e-value > 1e-2 ecartees.
 
 Limite connue : le "greedy-with-trimming" implemente ici suppose une
 identite uniforme le long de chaque HSP tronquee (on n'a pas acces au
@@ -179,7 +193,8 @@ def dddh_paire(a, b):
     if longueur_totale == 0:
         return None
     d = 1 - identites_totales / longueur_totale
-    similarite = INTERCEPT + SLOPE * d
+    # droite calibree pres du seuil : bornee pour ne jamais donner un % impossible (voir l'en-tete)
+    similarite = min(100.0, max(0.0, INTERCEPT + SLOPE * d))
     return d, similarite
 
 
