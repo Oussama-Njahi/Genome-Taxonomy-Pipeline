@@ -1,4 +1,4 @@
-# app.py - FastAPI backend for the Genome Taxonomy Explorer web interface.
+# app.py - FastAPI backend for the TGA (Taxo Genomics Analyses) web interface.
 # Wraps the existing pipeline (via pipeline_web.py) with subprocess calls,
 # it does not reimplement any bioinformatics logic.
 import re
@@ -18,12 +18,14 @@ JOBS_DIR = BASE_DIR / "jobs"
 FRONTEND_DIR = BASE_DIR / "frontend"
 JOBS_DIR.mkdir(exist_ok=True)
 
-app = FastAPI(title="Genome Taxonomy Explorer")
+app = FastAPI(title="TGA - Taxo Genomics Analyses")
 manager = JobManager(JOBS_DIR)
 
 # key -> path (relative to a job's directory) exposed for download/display
 RESULT_FILES = {
     "qc": ("results/qc.txt", "text/plain"),
+    "summary": ("results/synthese_paires.tsv", "text/tab-separated-values"),
+    "versions": ("results/versions.txt", "text/plain"),
     "ani": ("results/ani_resultats.txt", "text/plain"),
     "dddh": ("results/dddh_out/dddh_distance.tsv", "text/tab-separated-values"),
     "aai": ("results/aai_resultats.tsv", "text/tab-separated-values"),
