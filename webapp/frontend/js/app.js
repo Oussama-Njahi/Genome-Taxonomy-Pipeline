@@ -26,7 +26,10 @@ const newAnalysisBtn = $("newAnalysisBtn");
 const stepCheckboxes = document.querySelectorAll(".step-checkbox");
 
 const ALLOWED_EXT = [".fas", ".fasta", ".fna"];
-const MIN_GENOMES = 5;
+// pairwise comparisons need two genomes; the phylogenomic tree (EasyCGTree) needs five
+const MIN_GENOMES = 2;
+const MIN_GENOMES_TREE = 5;
+const minGenomes = () => (getSelectedSteps().includes("arbre") ? MIN_GENOMES_TREE : MIN_GENOMES);
 
 // Same order as STEPS_KEYS in scripts/pipeline_web.py
 const STEPS = [
@@ -68,7 +71,7 @@ function getSelectedSteps() {
 }
 
 function updateAnalyzeButtonState() {
-  const enoughFiles = selectedFiles.length >= MIN_GENOMES;
+  const enoughFiles = selectedFiles.length >= minGenomes();
   const steps = getSelectedSteps().length;
   analyzeBtn.disabled = !(enoughFiles && steps > 0);
   analyzeBtn.textContent = enoughFiles
@@ -76,7 +79,8 @@ function updateAnalyzeButtonState() {
     : "Analyze";
 }
 
-stepCheckboxes.forEach((cb) => cb.addEventListener("change", updateAnalyzeButtonState));
+// the minimum depends on the tree step, so the slots and the count are redrawn when a step is ticked
+stepCheckboxes.forEach((cb) => cb.addEventListener("change", renderFileList));
 
 function hasAllowedExtension(name) {
   const lower = name.toLowerCase();
@@ -121,8 +125,9 @@ function renderFileList() {
     fileListEl.appendChild(li);
   });
 
-  // empty numbered slots up to the minimum, so the five-genome rule is visible
-  for (let k = selectedFiles.length; k < MIN_GENOMES; k++) {
+  // empty numbered slots up to the minimum, so the rule is visible
+  const minimum = minGenomes();
+  for (let k = selectedFiles.length; k < minimum; k++) {
     const li = document.createElement("li");
     li.className = "awaiting";
     li.setAttribute("aria-hidden", "true");
@@ -131,10 +136,11 @@ function renderFileList() {
   }
 
   const count = selectedFiles.length;
-  fileCountEl.classList.toggle("ready", count >= MIN_GENOMES);
+  fileCountEl.classList.toggle("ready", count >= minimum);
   if (count === 0) fileCountEl.textContent = "No files selected";
-  else if (count < MIN_GENOMES) fileCountEl.textContent =
-    `${count} of the ${MIN_GENOMES} genomes needed at least — add ${MIN_GENOMES - count} more.`;
+  else if (count < minimum) fileCountEl.textContent =
+    `${count} of the ${minimum} genomes needed at least — add ${minimum - count} more` +
+    (minimum === MIN_GENOMES_TREE ? " (the tree needs five)." : ".");
   else fileCountEl.textContent = `${count} genomes, ready.`;
   updateAnalyzeButtonState();
 }
