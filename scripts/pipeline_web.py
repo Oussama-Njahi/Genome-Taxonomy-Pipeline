@@ -300,8 +300,21 @@ def etape_pocp(proteins_dir, results_dir, threads):
     print("    -> pocp_out/pocp_matrice.tsv created")
 
 
+def nom_easycgtree(nom):
+    """EasyCGTree renomme ses fichiers d'entree avant de les lire (sub rename de EasyCGTree.pl) : espaces et '_'
+    deviennent '-', et ce nom-la sert d'etiquette dans l'arbre. Les autres caracteres permis (NOM_PERMIS) restent."""
+    return re.sub(r"[\s_]", "-", nom)
+
+
 def etape_arbre(fichiers, results_dir, job_id, threads, outgroup=None):
     announce(8)
+    noms = [os.path.splitext(os.path.basename(f))[0] for f in fichiers]
+    vrai_nom = {}
+    for nom in noms:
+        autre = vrai_nom.setdefault(nom_easycgtree(nom), nom)
+        if autre != nom:
+            fail("EasyCGTree turns '_' into '-', so '%s' and '%s' would get the same name in the tree: "
+                 "rename one of them" % (autre, nom))
     if not os.path.exists(EASYCG + "/EasyCGTree.pl"):
         fail("EasyCGTree4 not found at %s - it must be installed manually "
              "(not available via conda), see the README's Installation section" % EASYCG)
@@ -316,11 +329,20 @@ def etape_arbre(fichiers, results_dir, job_id, threads, outgroup=None):
     arbre = EASYCG + "/" + input_name + ".bac120.120.supermatrix.fasttree.tree"
     if not os.path.exists(arbre):
         fail("tree file not found (%s) - EasyCGTree may have failed" % arbre)
+    # les feuilles reprennent les noms des genomes (ceux des matrices), pas ceux qu'EasyCGTree leur a donnes
+    with open(arbre) as fh:
+        newick = fh.read()
+    feuilles = re.findall(r"(?<=[(,])([^(),:;]+)(?=[:),;])", newick)
+    inconnues = sorted(set(feuilles) - set(vrai_nom))
+    if inconnues:
+        fail("unexpected leaf names in EasyCGTree's tree: %s" % ", ".join(inconnues))
+    newick = re.sub(r"(?<=[(,])([^(),:;]+)(?=[:),;])", lambda m: vrai_nom[m.group(1)], newick)
     # FastTree ecrit un arbre non enracine : on le garde tel quel, et arbre.tree
     # (lu par les figures et l'interface) est sa version enracinee, au point
     # median ou sur le groupe externe donne avec --outgroup.
     brut = results_dir + "/arbre_non_enracine.tree"
-    shutil.copy(arbre, brut)
+    with open(brut, "w") as fh:
+        fh.write(newick)
     cleanup_easycgtree(input_name)
     cmd = ["python", SCRIPTS + "/root_tree.py", brut, results_dir + "/arbre.tree"]
     if outgroup:
