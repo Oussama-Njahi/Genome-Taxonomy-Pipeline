@@ -344,7 +344,7 @@ const RESULT_TABS = [
 ];
 
 const DOWNLOAD_LINKS = {
-  "dl-qc": "qc",
+  "dl-qc": "qc", "dl-summary": "summary", "dl-versions": "versions",
   "dl-ani": "ani", "dl-ani-png": "heatmap_ani",
   "dl-dddh": "dddh", "dl-dddh-png": "heatmap_dddh",
   "dl-aai": "aai", "dl-aai-png": "heatmap_aai",
@@ -613,6 +613,8 @@ function renderQcTable(rows) {
     { key: "Taille(pb)", label: "Size (bp)", fmt: (v) => Number(v).toLocaleString("en-US") },
     { key: "GC(%)", label: "GC %" },
     { key: "Contigs", label: "Contigs" },
+    // N50 and Proteins: only in registers that have them (N50 since October 2026, Proteins when Prodigal ran)
+    ...("N50" in rows[0] ? [{ key: "N50", label: "N50", fmt: (v) => Number(v).toLocaleString("en-US") }] : []),
     // added by the backend only when Prodigal ran
     ...("Proteins" in rows[0] ? [{ key: "Proteins", label: "Proteins", fmt: (v) => (v ? Number(v).toLocaleString("en-US") : "") }] : []),
     { key: "Completeness(%)", label: "Complete %" },

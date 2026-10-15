@@ -95,10 +95,11 @@ def etapes_demandees(steps_arg):
 
 def lire_fasta(chemin):
     """Verifie qu'un fichier est bien un FASTA d'ADN et renvoie ses statistiques :
-    (longueur totale, nombre de G+C, nombre de A/C/G/T, nombre de sequences, empreinte SHA-1)."""
+    (longueur totale, nombre de G+C, nombre de A/C/G/T, nombre de sequences, empreinte SHA-1, N50)."""
     nom = os.path.basename(chemin)
     empreinte = hashlib.sha1()
     total = gc = acgt = sequences = 0
+    longueurs = []
     vu_entete = False
     with open(chemin, "rb") as fh:
         for numero, brut in enumerate(fh, 1):
@@ -109,6 +110,7 @@ def lire_fasta(chemin):
             if ligne.startswith(">"):
                 vu_entete = True
                 sequences += 1
+                longueurs.append(0)
                 continue
             if not vu_entete:
                 fail("%s is not a FASTA file: its first line should start with '>'" % nom)
@@ -118,11 +120,18 @@ def lire_fasta(chemin):
                 fail("%s, line %d: characters that are not DNA (%s) - is it really a genome assembly?"
                      % (nom, numero, "".join(sorted(inconnues))[:10]))
             total += len(ligne)
+            longueurs[-1] += len(ligne)
             gc += ligne.count("G") + ligne.count("C")
             acgt += sum(ligne.count(b) for b in "ACGT")
     if total == 0:
         fail("%s contains no sequence (empty file or headers only)" % nom)
-    return total, gc, acgt, sequences, empreinte.hexdigest()
+    # N50 : longueur du contig qui, avec tous les plus longs, couvre la moitie de l'assemblage
+    cumul = 0
+    for n50 in sorted(longueurs, reverse=True):
+        cumul += n50
+        if 2 * cumul >= total:
+            break
+    return total, gc, acgt, sequences, empreinte.hexdigest(), n50
 
 
 def lister_genomes(genomes_dir, selection):
@@ -229,10 +238,10 @@ def etape_qc(genomes, results_dir):
     'checkm2' pour les remplir (voir etape_checkm2 ci-dessous)."""
     announce(1)
     with open(results_dir + "/qc.txt", "w") as rapport:
-        rapport.write("Genome\tTaille(pb)\tGC(%)\tContigs\tCompleteness(%)\tContamination(%)\n")
-        for nom, (_, (total, gc, acgt, sequences, _)) in sorted(genomes.items()):
+        rapport.write("Genome\tTaille(pb)\tGC(%)\tContigs\tN50\tCompleteness(%)\tContamination(%)\n")
+        for nom, (_, (total, gc, acgt, sequences, _, n50)) in sorted(genomes.items()):
             taux = "%.1f" % (100.0 * gc / acgt) if acgt else "NA"
-            rapport.write("%s\t%d\t%s\t%d\tNA\tNA\n" % (nom, total, taux, sequences))
+            rapport.write("%s\t%d\t%s\t%d\t%d\tNA\tNA\n" % (nom, total, taux, sequences, n50))
     print("    -> qc.txt created (Completeness/Contamination = NA; also run 'checkm2' step to fill them in)")
 
 
@@ -246,10 +255,11 @@ def etape_checkm2(results_dir, fichiers, threads):
     with open(qc_path) as f:
         lignes = f.readlines()
     nouvelles_lignes = [lignes[0]]
+    entete = lignes[0].rstrip("\n").split("\t")      # colonnes reperees par leur nom (qc.txt a gagne N50)
+    i_comp, i_cont = entete.index("Completeness(%)"), entete.index("Contamination(%)")
     for ligne in lignes[1:]:
         cols = ligne.rstrip("\n").split("\t")
-        comp, cont = qualite.get(cols[0], ("NA", "NA"))
-        cols[4], cols[5] = comp, cont
+        cols[i_comp], cols[i_cont] = qualite.get(cols[0], ("NA", "NA"))
         nouvelles_lignes.append("\t".join(cols) + "\n")
     with open(qc_path, "w") as f:
         f.writelines(nouvelles_lignes)
@@ -363,6 +373,120 @@ def cleanup_easycgtree(input_name):
                 pass
 
 
+# Commandes qui affichent la version de chaque outil, par etape (une ligne suffit, voir ecrire_versions)
+VERSIONS = [
+    ("python", None, [sys.executable, "--version"]),
+    ("CheckM2", "checkm2", ["conda", "run", "-n", "checkm2env", "checkm2", "--version"]),
+    ("Prodigal", "proteines", ["prodigal", "-v"]),
+    ("FastANI", "ani", ["fastANI", "--version"]),
+    ("BLAST+ (blastn)", "dddh", ["blastn", "-version"]),
+    ("EzAAI", "aai", ["EzAAI", "-h"]),
+    ("DIAMOND", "pocp", ["diamond", "version"]),
+    ("EasyCGTree", "arbre", None),
+    ("R", "figures", ["Rscript", "--version"]),
+]
+
+
+def ecrire_versions(results_dir, selection, args):
+    """Trace du run dans results/versions.txt : date, commande, version du pipeline (commit git) et version de
+    chaque outil utilise. Ne fait jamais echouer le run : un outil introuvable est note comme tel."""
+    def premiere_ligne(cmd):
+        try:
+            sortie = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        except (OSError, subprocess.TimeoutExpired):
+            return "not found"
+        texte = re.sub(r"\x1b\[[0-9;]*m", "", sortie.stdout + sortie.stderr)
+        lignes = [l.strip() for l in texte.splitlines() if re.search(r"\d+\.\d+", l)]
+        return lignes[0] if lignes else "unknown"
+
+    try:
+        commit = subprocess.run(["git", "-C", SCRIPTS, "log", "-1", "--format=%h (%cd)", "--date=short"],
+                                capture_output=True, text=True, timeout=30).stdout.strip() or "unknown"
+    except (OSError, subprocess.TimeoutExpired):
+        commit = "unknown"
+    with open(results_dir + "/versions.txt", "w") as fh:
+        fh.write("date\t%s\n" % time.strftime("%Y-%m-%d %H:%M:%S"))
+        fh.write("command\t%s\n" % " ".join(sys.argv))
+        fh.write("steps\t%s\n" % ",".join(selection))
+        fh.write("threads\t%d\n" % args.threads)
+        fh.write("pipeline commit\t%s\n" % commit)
+        for outil, etape, cmd in VERSIONS:
+            if etape is not None and etape not in selection:
+                continue
+            version = os.path.basename(EASYCG) if cmd is None else premiere_ligne(cmd)
+            fh.write("%s\t%s\n" % (outil, version))
+
+
+# Seuils, identiques a ceux de l'interface (webapp/frontend/js/plates.js, METRICS) et de dddh.py
+SEUILS = {"ani": 95.0, "dddh": 0.0412, "aai": 65.0, "pocp": 50.0, "fraction": 0.5}
+
+
+def ecrire_synthese(results_dir):
+    """results/synthese_paires.tsv : une ligne par paire de genomes avec toutes les mesures calculees et les
+    verdicts. Ecrit a la fin de chaque run, a partir des resultats presents (une colonne reste a NA si son etape
+    n'a jamais ete lancee). Verdict d'espece : ANI et dDDH ; verdict de genre : POCP (seuil publie) et AAI
+    (seuil indicatif) ; 'conflict' quand les deux criteres d'un rang se contredisent."""
+    def matrice(chemin):
+        with open(chemin) as fh:
+            lignes = [l.rstrip("\n").split("\t") for l in fh if l.strip()]
+        noms = lignes[0][1:]
+        return {(l[0], n): (None if v in ("", "NA") else float(v)) for l in lignes[1:] for n, v in zip(noms, l[1:])}
+
+    nom = lambda chemin: os.path.splitext(os.path.basename(chemin))[0]
+    ani, aai, dddh, estim, pocp = {}, {}, {}, {}, {}
+    if os.path.exists(results_dir + "/ani_resultats.txt"):
+        for ligne in open(results_dir + "/ani_resultats.txt"):
+            c = ligne.split("\t")
+            if len(c) >= 5:
+                ani[(nom(c[0]), nom(c[1]))] = (float(c[2]), float(c[3]) / float(c[4]))
+    if os.path.exists(results_dir + "/aai_resultats.tsv"):
+        lignes = [l.rstrip("\n").split("\t") for l in open(results_dir + "/aai_resultats.tsv") if l.strip()]
+        tete = [h.strip().lower() for h in lignes[0]]
+        ia, ib, iv = tete.index("label 1"), tete.index("label 2"), tete.index("aai")
+        for c in lignes[1:]:
+            aai[(c[ia], c[ib])] = float(c[iv])
+    if os.path.exists(results_dir + "/dddh_out/dddh_distance.tsv"):
+        dddh = matrice(results_dir + "/dddh_out/dddh_distance.tsv")
+        estim = matrice(results_dir + "/dddh_out/dddh_similarite.tsv")
+    if os.path.exists(results_dir + "/pocp_out/pocp_matrice.tsv"):
+        pocp = matrice(results_dir + "/pocp_out/pocp_matrice.tsv")
+    noms = sorted({n for d in (ani, aai, dddh, pocp) for paire in d for n in paire})
+    if len(noms) < 2:
+        return
+
+    def verdict(a, b):
+        if a is None or b is None:
+            return a or b or "NA"
+        return a if a == b else "conflict"
+
+    lignes = []
+    for a, b in ((a, b) for i, a in enumerate(noms) for b in noms[i + 1:]):
+        sens = [ani.get(p) for p in ((a, b), (b, a)) if ani.get(p)]
+        ani_ab = sum(v for v, _ in sens) / len(sens) if sens else None
+        frac = min(f for _, f in sens) if sens else None
+        d = dddh.get((a, b))
+        aai_ab = aai.get((a, b), aai.get((b, a)))
+        pocp_ab = pocp.get((a, b))
+        # une paire absente de FastANI (pas d'alignement, ANI < ~80 %) est d'especes differentes
+        esp_ani = None if not ani else ("different" if ani_ab is None else
+                                        ("same" if ani_ab >= SEUILS["ani"] else "different"))
+        esp_dddh = None if d is None else ("same" if d <= SEUILS["dddh"] else "different")
+        espece = verdict(esp_ani, esp_dddh)
+        if espece == "same" and frac is not None and frac < SEUILS["fraction"]:
+            espece = "same (low aligned fraction)"
+        gen_pocp = None if pocp_ab is None else ("same" if pocp_ab >= SEUILS["pocp"] else "different")
+        gen_aai = None if aai_ab is None else ("same" if aai_ab >= SEUILS["aai"] else "different")
+        fmt = lambda v, f: "NA" if v is None else f % v
+        lignes.append([a, b, fmt(ani_ab, "%.2f"), fmt(frac, "%.2f"), fmt(d, "%.4f"), fmt(estim.get((a, b)), "%.1f"),
+                       fmt(aai_ab, "%.2f"), fmt(pocp_ab, "%.2f"), espece, verdict(gen_pocp, gen_aai)])
+    with open(results_dir + "/synthese_paires.tsv", "w") as fh:
+        fh.write("\t".join(["genome_a", "genome_b", "ani", "ani_aligned_fraction", "dddh_distance", "dddh_estimate",
+                            "aai", "pocp", "same_species", "same_genus"]) + "\n")
+        for l in lignes:
+            fh.write("\t".join(l) + "\n")
+    print("    -> synthese_paires.tsv: %d pairs, every measure and the species / genus calls" % len(lignes))
+
+
 def etape_figures(results_dir):
     announce(9)
     run(["Rscript", SCRIPTS + "/plot_all_web.R", results_dir])
@@ -397,6 +521,7 @@ def main():
 
     genomes = lister_genomes(genomes_dir, selection)   # toujours necessaire, rapide
     genomes_dir, fichiers = preparer_dossiers(genomes, os.path.abspath(args.output_dir), results_dir, proteins_dir)
+    ecrire_versions(results_dir, selection, args)
 
     if "qc" in selection:
         etape_qc(genomes, results_dir)
@@ -427,6 +552,7 @@ def main():
     if "figures" in selection:
         etape_figures(results_dir)
 
+    ecrire_synthese(results_dir)
     print("===== PIPELINE DONE =====")
 
 
