@@ -13,7 +13,6 @@ ALLOWED_EXTENSIONS = {".fas", ".fasta", ".fna"}
 MIN_GENOMES = 2          # pairwise comparisons need two genomes...
 MIN_GENOMES_TREE = 5     # ...and EasyCGTree cannot build a tree with fewer than five
 THREADS = os.cpu_count() or 4
-TOTAL_STEPS = 9
 STEP_KEYS = ["qc", "checkm2", "proteines", "ani", "dddh", "aai", "pocp", "arbre", "figures"]
 
 SCRIPT = Path(__file__).resolve().parent.parent.parent / "scripts" / "pipeline_web.py"
@@ -34,8 +33,8 @@ class JobManager:
         with self.lock:
             self.jobs[job_id] = {
                 "status": "queued",
-                "step": 0,
-                "total": TOTAL_STEPS,
+                "running_steps": [],   # steps in progress (Snakemake may run several at once)...
+                "done_steps": [],      # ...and steps finished, read from the PROGRESS lines of pipeline_web.py
                 "label": "Waiting in queue...",
                 "log": [],
                 "error": None,
@@ -62,7 +61,7 @@ class JobManager:
         marker = job_dir / "status.json"
         n_genomes = sum(1 for f in (job_dir / "genomes").iterdir()
                         if f.suffix.lower() in ALLOWED_EXTENSIONS) if (job_dir / "genomes").is_dir() else None
-        job = {"step": TOTAL_STEPS, "total": TOTAL_STEPS, "log": [], "error": None,
+        job = {"running_steps": [], "done_steps": [], "log": [], "error": None,
                "n_genomes": n_genomes, "steps": "all"}
         if marker.exists():
             saved = json.loads(marker.read_text())
@@ -111,6 +110,18 @@ class JobManager:
             if job_id in self.jobs:
                 self.jobs[job_id].update(kwargs)
 
+    def _progress(self, job_id: str, event: str, step: str):
+        """'PROGRESS start <step>' and 'PROGRESS done <step>': a step can start several times (one job per genome
+        for Prodigal and EzAAI), it is in progress until its 'done' line."""
+        with self.lock:
+            job = self.jobs[job_id]
+            if event == "done":
+                job["running_steps"] = [s for s in job["running_steps"] if s != step]
+                if step not in job["done_steps"]:
+                    job["done_steps"] = job["done_steps"] + [step]
+            elif step not in job["running_steps"] and step not in job["done_steps"]:
+                job["running_steps"] = job["running_steps"] + [step]
+
     def _append_log(self, job_id: str, line: str):
         with self.lock:
             log = self.jobs[job_id]["log"]
@@ -148,11 +159,11 @@ class JobManager:
             for raw_line in proc.stdout:
                 line = raw_line.rstrip("\n")
                 self._append_log(job_id, line)
-                if line.startswith("PROGRESS"):
-                    parts = line.split(" ", 2)
-                    n, total = parts[1].split("/")
-                    label = parts[2] if len(parts) > 2 else ""
-                    self._update(job_id, step=int(n), total=int(total), label=label)
+                if line.startswith("STEPS "):
+                    # the steps that will run: the selected ones, plus those they need (see etapes_prevues)
+                    self._update(job_id, steps=line[len("STEPS "):].strip())
+                elif line.startswith("PROGRESS ") and len(line.split()) >= 3:
+                    self._progress(job_id, *line.split()[1:3])
                 elif line.startswith("STEP FAILED"):
                     self._update(job_id, error=line[len("STEP FAILED: "):])
             proc.wait()
@@ -174,4 +185,4 @@ class JobManager:
             self._update(job_id, status="error", label="Failed", error=str(exc))
         with self.lock:
             final = dict(self.jobs[job_id])
-        self._mark(job_dir, final["status"], steps, final.get("error"))
+        self._mark(job_dir, final["status"], final["steps"], final.get("error"))

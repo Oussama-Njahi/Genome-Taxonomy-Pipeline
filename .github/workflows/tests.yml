@@ -1,5 +1,5 @@
 # Runs on every push and pull request: syntax of every script and the unit tests that need no
-# bioinformatics tool (tree rooting, genome checks, run history, pairwise summary).
+# bioinformatics tool (tree rooting, genome checks, run history, pairwise summary, the Snakemake DAG).
 name: tests
 on: [push, pull_request]
 jobs:
@@ -13,6 +13,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+      - name: Snakemake
+        run: pip install snakemake==9.27.0
       - name: Python syntax
         run: python -m py_compile scripts/*.py webapp/backend/*.py validation/*/*.py tests/*.py
       - name: JavaScript syntax
@@ -21,3 +23,4 @@ jobs:
         run: |
           python tests/test_root_tree.py
           python tests/test_pipeline_inputs.py
+          python tests/test_workflow.py

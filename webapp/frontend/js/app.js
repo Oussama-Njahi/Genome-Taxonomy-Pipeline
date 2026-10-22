@@ -218,7 +218,7 @@ function beginWatching(jobId, steps) {
   progressCard.classList.remove("hidden");
   cancelBtn.disabled = false;
   logBox.textContent = "";
-  renderProgress({ status: "queued", step: 0, total: 0, steps, log: [] });
+  renderProgress({ status: "queued", steps, log: [] });
   pollStatus(jobId);
 }
 
@@ -295,26 +295,29 @@ function renderProgress(state) {
   const total = steps.length;
   const done = state.status === "done";
   const running = state.status === "running";
-  // PROGRESS n/total: step n is in the press, so n-1 are finished
-  const finished = done ? total : Math.max(0, (state.step || 0) - 1);
+  // Snakemake can run several steps at once: the backend lists the ones finished and the ones in progress
+  const finishedKeys = new Set(state.done_steps || []);
+  const inPress = running ? steps.filter((s) => (state.running_steps || []).includes(s.key) && !finishedKeys.has(s.key)) : [];
+  const finished = done ? total : steps.filter((s) => finishedKeys.has(s.key)).length;
   const pct = total ? Math.round((finished / total) * 100) : 0;
   progressFill.style.width = pct + "%";
   progressPct.textContent = pct + "%";
-  // the rule's divisions and the hatched segment of the step in the press (see .press-track in style.css)
+  // the rule's divisions and the hatched segment of the steps in the press (see .press-track in style.css)
   const track = progressFill.parentElement;
   track.style.setProperty("--steps", total || 1);
   track.style.setProperty("--p", total ? finished / total : 0);
-  track.classList.toggle("is-running", running && finished < total);
+  track.style.setProperty("--r", inPress.length);
+  track.classList.toggle("is-running", inPress.length > 0);
   progressLabel.textContent =
     state.status === "queued" ? "Waiting for the press…"
       : done ? "Finished"
-      : state.step ? `Step ${state.step} of ${total} — ${state.label}` : "Starting…";
+      : inPress.length ? `${finished} of ${total} set — ${inPress.map((s) => s.title).join(", ")}` : "Starting…";
 
   pressSteps.textContent = "";
-  steps.forEach((s, k) => {
+  steps.forEach((s) => {
     const li = document.createElement("li");
-    const isDone = done || k < finished;
-    const isCurrent = running && k === finished && state.step > 0;
+    const isDone = done || finishedKeys.has(s.key);
+    const isCurrent = inPress.includes(s);
     li.className = isDone ? "done" : isCurrent ? "current" : "";
     const num = document.createElement("span"); num.className = "ps-num"; num.textContent = s.num + ".";
     const title = document.createElement("span"); title.className = "ps-title"; title.textContent = s.title;

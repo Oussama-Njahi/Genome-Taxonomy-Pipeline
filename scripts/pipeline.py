@@ -1,6 +1,7 @@
 """pipeline.py - Point d'entree en ligne de commande du pipeline.
 
-Lance le meme pipeline que l'interface web (pipeline_web.py) sur les dossiers
+Lance le meme pipeline que l'interface web (pipeline_web.py, qui execute les
+etapes avec Snakemake : workflow/Snakefile) sur les dossiers
 habituels du projet : genomes/ en entree (.fas, .fasta ou .fna, au moins 5),
 proteins/ et results/ en sortie. Les 9 etapes n'existent donc qu'en un seul
 exemplaire, avec les memes verifications d'erreurs et les memes figures en
@@ -15,7 +16,8 @@ Usage :
 
 Etapes (--steps, separees par des virgules) :
   qc, checkm2, proteines, ani, dddh, aai, pocp, arbre, figures
-  (checkm2 a besoin de qc, pocp a besoin de proteines)
+  (pocp a besoin des proteines : l'etape proteines tourne aussi si elles manquent ;
+   qc.txt est refait apres checkm2 pour prendre ses valeurs)
 """
 import os
 import subprocess
