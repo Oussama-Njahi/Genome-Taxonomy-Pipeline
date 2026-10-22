@@ -1,5 +1,5 @@
-"""Tests of scripts/pipeline_web.py that need no bioinformatics tool: genome checks, N50, run history,
-EasyCGTree names and the pairwise summary. Run with: python tests/test_pipeline_inputs.py  (or pytest)."""
+"""Tests of scripts/pipeline_web.py (and arbre.py, qc.py) that need no bioinformatics tool: genome checks, N50, run
+history, EasyCGTree names, CheckM2's report and the pairwise summary. Run with: python tests/test_pipeline_inputs.py  (or pytest)."""
 import contextlib
 import io
 import os
@@ -7,7 +7,9 @@ import sys
 import tempfile
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts"))
+import arbre  # noqa: E402
 import pipeline_web as pw  # noqa: E402
+import qc  # noqa: E402
 
 ADN = "ACGTACGTGGCC" * 100          # 1 200 bp, 8 G/C sur 12 bases
 
@@ -84,8 +86,28 @@ def test_noms_refuses():
 
 
 def test_noms_easycgtree():
-    assert pw.nom_easycgtree("GCF_000009045.1_ASM904v1_genomic") == "GCF-000009045.1-ASM904v1-genomic"
-    assert pw.nom_easycgtree("Bacillus-subtilis-168") == "Bacillus-subtilis-168"
+    assert arbre.nom_easycgtree("GCF_000009045.1_ASM904v1_genomic") == "GCF-000009045.1-ASM904v1-genomic"
+    assert arbre.nom_easycgtree("Bacillus-subtilis-168") == "Bacillus-subtilis-168"
+
+
+def test_qc_et_checkm2():
+    with tempfile.TemporaryDirectory() as d:
+        genomes, res = os.path.join(d, "g"), os.path.join(d, "results")
+        os.makedirs(genomes)
+        os.makedirs(os.path.join(res, "checkm2_out_fna"))
+        ecrire(genomes, "A.fna", ">x\n%s\n" % ADN)
+        ecrire(genomes, "B.fna", ">x\n%s\n" % ADN)
+        silencieux(qc.ecrire_qc, genomes, res)                 # sans rapport de CheckM2 : NA
+        with open(os.path.join(res, "qc.txt")) as fh:
+            assert fh.read().splitlines()[1].split("\t")[-2:] == ["NA", "NA"]
+        # colonnes reperees par leur nom, meme dans un autre ordre ; B absent du rapport reste a NA
+        ecrire(res, "checkm2_out_fna/quality_report.tsv",
+               "Name\tContamination\tCompleteness\tCompleteness_Model_Used\nA\t0.15\t99.99\tNeural Network\n")
+        silencieux(qc.ecrire_qc, genomes, res)
+        with open(os.path.join(res, "qc.txt")) as fh:
+            lignes = [l.split("\t") for l in fh.read().splitlines()]
+        assert lignes[1][0] == "A" and lignes[1][2] == "66.7" and lignes[1][-2:] == ["99.99", "0.15"]
+        assert lignes[2][0] == "B" and lignes[2][-2:] == ["NA", "NA"]
 
 
 def test_resultats_gardes_ou_archives():

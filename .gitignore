@@ -5,6 +5,7 @@ logs/
 EasyCGTree4/
 webapp/jobs/
 __pycache__/
+.snakemake/
 *.pyc
 .Rhistory
 *.tar.gz

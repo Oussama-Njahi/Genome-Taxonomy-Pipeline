@@ -77,6 +77,7 @@ utilisable par un biologiste sans ligne de commande, qui produise des résultats
 | **5 – 6 oct.** | Documentation de la méthode dDDH implémentée (Auch 2010 contre le GGDC actuel). Progression numérotée parmi les étapes choisies. Refonte de l'interface et des figures R en « planche d'atlas ancien ». Test complet sur 5 génomes NCBI. **Logo TGA**. Colonne « Proteins » dans le registre. Jobs terminés retrouvés après un redémarrage du serveur. |
 | **11 oct.** | **Corrections scientifiques** : arbre enraciné ; dDDH avec BLASTN classique ; POCP avec DIAMOND ultra-sensible ; fraction alignée de l'ANI. Interface : vocabulaire « step », nouvelle barre de progression. |
 | **11 – 14 oct.** | **Validation** : dDDH sur 37 paires de génomes de référence ; POCP DIAMOND contre BLASTP. *(non commitée)* |
+| **22 oct.** | **Snakemake** : les neuf étapes deviennent un workflow (`workflow/Snakefile`). Dépendances entre étapes gérées par Snakemake, tâches par génome en parallèle, CheckM2 dans son environnement conda par la directive `conda:`. |
 
 ---
 
@@ -92,7 +93,9 @@ utilisable par un biologiste sans ligne de commande, qui produise des résultats
                  │ app.py · job_manager.py      │  suit la progression sur stdout
                  └──────────────┬───────────────┘
   ligne de                      │ subprocess
-  commande ──► scripts/pipeline.py ──► scripts/pipeline_web.py   (les 9 étapes, un seul exemplaire)
+  commande ──► scripts/pipeline.py ──► scripts/pipeline_web.py   (vérifications, dossiers, synthèse)
+                                │ snakemake
+                       workflow/Snakefile   (les 9 étapes, un seul exemplaire)
                                 │
         ┌───────────┬───────────┼────────────┬──────────────┬─────────────┐
      Python       BLAST+     DIAMOND       FastANI        EzAAI (Java)   Perl : EasyCGTree4 → FastTree
@@ -100,18 +103,25 @@ utilisable par un biologiste sans ligne de commande, qui produise des résultats
     POCP, racine)                                         CheckM2 (env. conda séparé)
 ```
 
-- **Python** orchestre tout par `subprocess`. Il appelle **Perl** (EasyCGTree) et **R** (figures), sur le même modèle
-  multi-langage que des pipelines de référence comme PGCGAP, qui ne calcule ni AAI ni POCP.
+- **Snakemake** exécute les étapes : chaque règle du `Snakefile` déclare les fichiers qu'elle lit et écrit, ce qui
+  donne l'ordre d'exécution, relance une étape nécessaire dont les fichiers manquent et réutilise les résultats d'un
+  run précédent des mêmes génomes. Prodigal et `EzAAI extract` tournent génome par génome, en parallèle ; les étapes
+  lourdes prennent tous les cœurs et passent l'une après l'autre.
+- **Python** (`pipeline_web.py`) vérifie les génomes, prépare les dossiers, lance Snakemake et écrit la synthèse. Les
+  règles appellent **Perl** (EasyCGTree) et **R** (figures), sur le même modèle multi-langage que des pipelines de
+  référence comme PGCGAP, qui ne calcule ni AAI ni POCP.
 - **Un seul pipeline** : la ligne de commande et l'interface web lancent le même `pipeline_web.py`. Un résultat obtenu
   d'une façon est donc reproductible de l'autre.
-- **Progression** : chaque étape écrit `PROGRESS n/total <nom>` sur la sortie standard, que le backend lit pour
-  piloter la barre de progression.
+- **Progression** : `pipeline_web.py` annonce les étapes du run (`STEPS ...`), puis chaque étape écrit
+  `PROGRESS start <étape>` et `PROGRESS done <étape>` sur la sortie standard ; le backend les lit pour piloter la
+  barre de progression, où plusieurs étapes peuvent être en cours à la fois.
 
 ### Environnement logiciel (versions utilisées)
 
 | Outil | Version | Rôle |
 |---|---|---|
 | Python | 3.14.7 | orchestration, QC, dDDH, POCP, enracinement |
+| Snakemake | 9.27.0 | exécution des étapes (workflow) |
 | FastANI | 1.34 | ANI |
 | BLAST+ (`blastn`) | via bioconda | alignements du dDDH |
 | DIAMOND | 2.2.8 | alignements du POCP |
@@ -129,9 +139,9 @@ Machine de développement : Ubuntu sous WSL2, 12 cœurs, 11 Go de RAM.
 
 ## 5. Les neuf étapes du pipeline
 
-Clés `--steps` : `qc, checkm2, proteines, ani, dddh, aai, pocp, arbre, figures`. Dépendances : `checkm2` a besoin de
-`qc`, et `pocp` a besoin de `proteines`. Si on saute une étape dont une autre dépend, seule celle-ci est ignorée,
-avec un avertissement ; le reste tourne.
+Clés `--steps` : `qc, checkm2, proteines, ani, dddh, aai, pocp, arbre, figures`. Une étape choisie est toujours
+relancée. Dépendances : `pocp` a besoin des protéines, et `proteines` tourne aussi si elles manquent ; `qc.txt` est
+réécrit après `checkm2` pour prendre ses valeurs.
 
 **Avant toute étape, chaque génome est vérifié.**
 - **Fichier :** l'extension `.fas`, `.fasta` ou `.fna` est acceptée quelle que soit la casse ; le fichier doit être
@@ -152,7 +162,7 @@ disponibles (`--threads`).
 | # | Étape | Outil et paramètres | Sorties (`results/`) |
 |---|---|---|---|
 | 1 | **Contrôle qualité** | script Python : taille, %GC (sur A/C/G/T), nombre de contigs, N50 | `qc.txt` |
-| 2 | **Complétude / contamination** | CheckM2 `predict`, 4 threads, environnement `checkm2env` | colonnes ajoutées à `qc.txt` |
+| 2 | **Complétude / contamination** | CheckM2 `predict`, `--threads`, environnement `checkm2env` | `checkm2_out_fna/quality_report.tsv`, repris dans `qc.txt` |
 | 3 | **Prédiction des protéines** | Prodigal `-q` | `proteins/<génome>.faa` |
 | 4 | **ANI** | FastANI tous contre tous (`--ql`/`--rl`), `--threads` | `ani_resultats.txt` (ANI, fragments alignés, fragments totaux) |
 | 5 | **dDDH** | `dddh.py` : BLASTN `-task blastn`, e-value ≤ 1e-2, formule 2, trimming (§ 6.1) | `dddh_out/dddh_distance.tsv`, `dddh_similarite.tsv` |
@@ -409,7 +419,8 @@ Les cas difficiles sont bien traités :
 mamba env create -f stage_environment.yml
 conda activate stage
 # CheckM2, dans un environnement séparé (conflit TensorFlow/Python)
-mamba create -n checkm2env -y -c conda-forge -c bioconda python=3.12 checkm2
+mamba create -n checkm2env -y -c conda-forge -c bioconda python=3.12 checkm2=1.1.0
+conda run -n checkm2env checkm2 database --download --path ~/databases   # base DIAMOND de CheckM2, ~3 Go
 # EasyCGTree4 : installation manuelle dans EasyCGTree4/EasyCGTree.v4.2-Linux/ (voir README)
 ```
 

@@ -8,8 +8,9 @@ channels:
   - conda-forge
   - bioconda
 dependencies:
-  # pipeline and web server
+  # pipeline, workflow and web server
   - python=3.14.7
+  - snakemake-minimal=9.27.0
   - fastapi=0.141.1
   - uvicorn=0.54.0
   - python-multipart=0.0.32

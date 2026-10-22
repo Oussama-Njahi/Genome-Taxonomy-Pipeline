@@ -11,12 +11,12 @@ Given a folder of bacterial genome assemblies (FASTA), the pipeline runs nine st
 | Step | Task | Tool |
 |------|------|------|
 | 1 | Quality control (size, GC%, contigs) | custom script |
-| 2 | Completeness / contamination (needs step 1) | [CheckM2](https://github.com/chklovski/CheckM2) |
+| 2 | Completeness / contamination (written into step 1's report) | [CheckM2](https://github.com/chklovski/CheckM2) |
 | 3 | Protein prediction | [Prodigal](https://github.com/hyattpd/Prodigal) |
 | 4 | Average Nucleotide Identity (species delineation, 95% threshold) | [FastANI](https://github.com/ParBLiSS/FastANI) |
 | 5 | digital DNA-DNA Hybridization (species delineation, GBDP formula 2, Auch et al. 2010 method) | custom script + BLASTN (`-task blastn`) |
 | 6 | Average Amino acid Identity (genus-level relationships) | [EzAAI](https://github.com/endixk/ezaai) |
-| 7 | Percentage of Conserved Proteins (genus delineation, 50% threshold, needs step 3) | custom script + [DIAMOND](https://github.com/bbuchfink/diamond) (`--ultra-sensitive`) |
+| 7 | Percentage of Conserved Proteins (genus delineation, 50% threshold, uses step 3's proteins) | custom script + [DIAMOND](https://github.com/bbuchfink/diamond) (`--ultra-sensitive`) |
 | 8 | Phylogenomic tree (120 bacterial core genes, GTDB bac120 set), rooted at its midpoint or on an outgroup | [EasyCGTree4](https://github.com/zdf1987/EasyCGTree4) (Perl) + FastTree |
 | 9 | Figures (heatmaps + annotated tree) | R (ggplot2, ggtree) |
 
@@ -26,13 +26,15 @@ A single command runs the full chain:
 python scripts/pipeline.py
 ```
 
-Run only a subset with `--steps` (comma-separated, e.g. `--steps qc,ani,dddh`) — useful to skip CheckM2 (RAM-heavy, see Requirements) while still getting the rest.
+Run only a subset with `--steps` (comma-separated, e.g. `--steps qc,ani,dddh`) — useful to skip CheckM2 (RAM-heavy, see Requirements) while still getting the rest. A selected step always runs again; a step it needs runs too when its files are missing (POCP runs protein prediction first if there are no proteins yet, and the quality report is rewritten after CheckM2 to take its values).
 
 FastTree writes an unrooted tree, so the pipeline roots it before drawing it: at its midpoint by default, or on an outgroup with `--outgroup` (one or more genome names without the file extension, comma-separated, e.g. `--outgroup Staphylococcus-aureus-NCTC8325`). Prefer an outgroup when you have one. `results/arbre.tree` is the rooted tree; the tree as computed is kept in `results/arbre_non_enracine.tree`.
 
 ## Architecture
 
-**Python** orchestrates the whole pipeline via `subprocess`, calling out to **Perl** (EasyCGTree, for the phylogenomic tree) and **R** (ggplot2/ggtree, for the figures) — the same multi-language integration pattern used by reference pipelines such as [PGCGAP](https://github.com/liaochenlanruo/pgcgap), extended here with AAI and POCP, which PGCGAP does not provide.
+The nine steps are a **[Snakemake](https://snakemake.readthedocs.io)** workflow (`workflow/Snakefile`): each step declares the files it reads and writes, so Snakemake runs them in the right order, runs a missing step another one needs, reuses the results of a previous run of the same genomes, and runs the per-genome jobs (Prodigal, EzAAI extract) side by side. The heavy steps use every core and run one at a time. CheckM2 runs in its own conda environment (`conda: "checkm2env"` in the Snakefile).
+
+**Python** (`scripts/pipeline_web.py`) checks the genomes, prepares the folders, calls Snakemake and writes the pairwise summary; the steps call out to **Perl** (EasyCGTree, for the phylogenomic tree) and **R** (ggplot2/ggtree, for the figures) — the same multi-language integration pattern used by reference pipelines such as [PGCGAP](https://github.com/liaochenlanruo/pgcgap), extended here with AAI and POCP, which PGCGAP does not provide.
 
 ## Key finding (validation dataset)
 
@@ -69,7 +71,10 @@ CheckM2 requires a separate environment due to a TensorFlow/Python version confl
 
 ```bash
 mamba create -n checkm2env -y -c conda-forge -c bioconda python=3.12 checkm2=1.1.0
+conda run -n checkm2env checkm2 database --download --path ~/databases   # CheckM2's DIAMOND database, ~3 GB
 ```
+
+Snakemake activates `checkm2env` by its name, so keep that name.
 
 EasyCGTree4 is not distributed via conda and must be installed manually — see [its repository](https://github.com/zdf1987/EasyCGTree4) for instructions (clone, unzip the Linux release and HMM profile parts, place the `.hmm` files in `EasyCGTree4/EasyCGTree.v4.2-Linux/HMM/`, `chmod +x` the `bin/` folder, and install the system package `libgomp1`).
 
@@ -86,7 +91,8 @@ Results (quality report, ANI/dDDH/AAI/POCP matrices, tree, figures) are written 
 Every run also writes, whatever the steps:
 
 - `results/synthese_paires.tsv`: one line per pair of genomes with ANI (and its aligned fraction), dDDH, AAI and POCP, and the species and genus calls (`conflict` when the two criteria of a rank disagree);
-- `results/versions.txt`: the date, the command, the pipeline's git commit and the version of every tool used, to report or reproduce a run.
+- `results/versions.txt`: the date, the command, the pipeline's git commit and the version of every tool used, to report or reproduce a run;
+- `results/snakemake_config.json`: the configuration given to the Snakefile (folders, steps, outgroup). Snakemake's own log of the run is in `.snakemake/log/`.
 
 The quality report (`qc.txt`) gives size, GC % (over A/C/G/T only), number of contigs and N50, plus completeness and contamination when CheckM2 is run.
 
@@ -120,11 +126,15 @@ Then open `http://127.0.0.1:8000`. Upload at least 2 genome assemblies (`.fas`, 
 .
 ├── scripts/
 │   ├── pipeline.py       # command-line entry point: runs pipeline_web.py on genomes/
-│   ├── pipeline_web.py   # the 9-step pipeline (also used by the web interface)
+│   ├── pipeline_web.py   # checks the genomes, runs the workflow, writes the summary (also used by the web interface)
+│   ├── qc.py             # quality report (size, GC %, contigs, N50, CheckM2's values)
 │   ├── pocp.py           # POCP calculation (DIAMOND-based)
 │   ├── dddh.py           # dDDH calculation (BLASTN-based, GBDP formula 2)
+│   ├── arbre.py          # phylogenomic tree (EasyCGTree + FastTree), leaves renamed and rooted
 │   ├── root_tree.py      # roots the tree (midpoint or outgroup), keeping branch supports
 │   └── plot_all_web.R    # figure generation (ggplot2 + ggtree)
+├── workflow/
+│   └── Snakefile         # the 9 steps as a Snakemake workflow
 ├── webapp/
 │   ├── backend/          # FastAPI server (app.py, job_manager.py)
 │   └── frontend/         # upload form + results UI (HTML/CSS/JS, no build step)
@@ -142,10 +152,11 @@ Then open `http://127.0.0.1:8000`. Upload at least 2 genome assemblies (`.fas`, 
 
 ```bash
 python tests/test_root_tree.py        # tree rooting
-python tests/test_pipeline_inputs.py  # genome checks, N50, run history, pairwise summary
+python tests/test_pipeline_inputs.py  # genome checks, N50, run history, CheckM2's report, pairwise summary
+python tests/test_workflow.py         # the jobs Snakemake runs for a selection of steps (dry run)
 ```
 
-They need no bioinformatics tool and run on every push (`.github/workflows/tests.yml`). The scientific validation is in `validation/` (see its README).
+They need no bioinformatics tool (the last one needs Snakemake) and run on every push (`.github/workflows/tests.yml`). The scientific validation is in `validation/` (see its README).
 
 ## Roadmap
 
