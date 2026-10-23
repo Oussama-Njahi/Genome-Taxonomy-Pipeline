@@ -1,24 +1,30 @@
 #!/usr/bin/env python3
-# pipeline_web.py - Parameterized version of pipeline.py for the web interface.
+# pipeline_web.py - The pipeline, for the web interface and the command line (pipeline.py calls it).
 #
-# Same 9 steps, same tools, same logic as pipeline.py. The only difference is
-# that genome folder, protein folder and results folder are passed as
-# command-line arguments instead of being hardcoded, so several independent
-# jobs (one per web upload) can run without touching each other's files.
+# Genome folder, protein folder and results folder are passed as command-line
+# arguments, so several independent jobs (one per web upload) can run without
+# touching each other's files. This script checks the genomes, prepares the
+# folders and writes versions.txt; the 9 steps themselves are a Snakemake
+# workflow (workflow/Snakefile), run here on the selected steps; the pairwise
+# summary is written at the end.
 #
 # Usage:
 #   python pipeline_web.py --genomes-dir <dir> --output-dir <dir> [--job-id <id>] [--threads 4] [--steps qc,ani,aai]
 #                          [--outgroup <genome>]
 #
-# Progress is reported on stdout as lines "PROGRESS <n>/9 <label>" so a caller
-# (e.g. the FastAPI backend) can parse them to drive a progress bar.
+# Progress is reported on stdout so a caller (e.g. the FastAPI backend) can
+# drive a progress bar: first "STEPS <key>,<key>,..." (the steps that will
+# run), then "PROGRESS start <key> <label>" and "PROGRESS done <key> <label>"
+# for each of them. Several steps can be in progress at the same time.
 
 import argparse
 import glob
 import hashlib
+import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -52,19 +58,15 @@ TAILLE_SUSPECTE = 500000        # en dessous, prevenir : un genome bacterien fai
 SCRIPTS = os.path.dirname(os.path.abspath(__file__))
 BASE = os.path.dirname(SCRIPTS)
 EASYCG = BASE + "/EasyCGTree4/EasyCGTree.v4.2-Linux"
+SNAKEFILE = BASE + "/workflow/Snakefile"
 
+# Regles du Snakefile de chaque etape, relancees (--forcerun) quand l'etape est demandee
+REGLES = {"qc": ["qc"], "checkm2": ["checkm2"], "proteines": ["prodigal"], "ani": ["ani"], "dddh": ["dddh"],
+          "aai": ["ezaai_extract", "aai"], "pocp": ["pocp"], "arbre": ["arbre"], "figures": ["figures"]}
 
-# Etapes choisies avec --steps, remplie par main() : la progression est
-# numerotee parmi elles (un run "ani,dddh" affiche 1/2 puis 2/2, pas 4/9)
-SELECTION = list(STEPS_KEYS)
-
-
-def announce(step_index, extra=""):
-    label = STEPS[step_index - 1]
-    key = STEPS_KEYS[step_index - 1]
-    position = SELECTION.index(key) + 1 if key in SELECTION else step_index
-    print("PROGRESS %d/%d %s%s" % (position, len(SELECTION), label, (" - " + extra) if extra else ""))
-    sys.stdout.flush()
+# Lignes de Snakemake sans interet dans le journal (une paire par tache lancee)
+BRUIT = ("Assuming unrestricted shared filesystem usage", "Using shell:", "Select jobs to execute...",
+         "Execute ", "Building DAG of jobs...")
 
 
 def fail(message):
@@ -194,188 +196,18 @@ def preparer_dossiers(genomes, output_dir, results_dir, proteins_dir):
     for nom, (chemin, _) in sorted(genomes.items()):
         lien = os.path.join(entree, nom + ".fna")
         os.symlink(os.path.abspath(chemin), lien)
+        # le lien prend la date du genome : Snakemake compare aussi celle du lien aux resultats, et un lien
+        # recree a chaque run ferait refaire toutes les etapes gardees du run d'avant
+        date = os.stat(chemin)
+        os.utime(lien, ns=(date.st_atime_ns, date.st_mtime_ns), follow_symlinks=False)
         fichiers.append(lien)
     return entree, fichiers
-
-
-def lire_checkm2(results_dir, fichiers, threads):
-    print("    (running CheckM2, this may take a few minutes...)")
-
-    groupes = {}
-    for chemin in fichiers:
-        ext = os.path.splitext(chemin)[1].lstrip(".")
-        groupes.setdefault(ext, []).append(chemin)
-
-    qualite = {}
-    for ext, genomes_du_groupe in groupes.items():
-        sous_dossier = results_dir + "/checkm2_input_" + ext
-        os.makedirs(sous_dossier, exist_ok=True)
-        for chemin in genomes_du_groupe:
-            shutil.copy(chemin, sous_dossier)
-
-        sortie = results_dir + "/checkm2_out_" + ext
-        run(["conda", "run", "-n", "checkm2env",
-             "checkm2", "predict",
-             "--input", sous_dossier,
-             "--output-directory", sortie,
-             "-x", ext, "--threads", str(threads), "--force"])
-
-        rapport = sortie + "/quality_report.tsv"
-        with open(rapport) as f:
-            next(f)
-            for ligne in f:
-                cols = ligne.strip().split("\t")
-                nom, completude, contamination = cols[0], cols[1], cols[2]
-                qualite[nom] = (completude, contamination)
-
-    return qualite
-
-
-def etape_qc(genomes, results_dir):
-    """Stats de base uniquement (taille, GC%, contigs) - rapide, pas de CheckM2. Les statistiques viennent de la
-    verification des genomes (lire_fasta). Le %GC est calcule sur les seules bases A/C/G/T, pour que les N d'un
-    assemblage ne le fassent pas baisser. Completeness/Contamination sont ecrits a "NA" ; lancer aussi l'etape
-    'checkm2' pour les remplir (voir etape_checkm2 ci-dessous)."""
-    announce(1)
-    with open(results_dir + "/qc.txt", "w") as rapport:
-        rapport.write("Genome\tTaille(pb)\tGC(%)\tContigs\tN50\tCompleteness(%)\tContamination(%)\n")
-        for nom, (_, (total, gc, acgt, sequences, _, n50)) in sorted(genomes.items()):
-            taux = "%.1f" % (100.0 * gc / acgt) if acgt else "NA"
-            rapport.write("%s\t%d\t%s\t%d\t%d\tNA\tNA\n" % (nom, total, taux, sequences, n50))
-    print("    -> qc.txt created (Completeness/Contamination = NA; also run 'checkm2' step to fill them in)")
-
-
-def etape_checkm2(results_dir, fichiers, threads):
-    """Lance CheckM2 et met a jour les colonnes Completeness/Contamination
-    de qc.txt (qui doit deja exister, ecrit par l'etape 'qc' - verifie par
-    l'appelant dans main(), comme pour la dependance proteines -> pocp)."""
-    announce(2)
-    qc_path = results_dir + "/qc.txt"
-    qualite = lire_checkm2(results_dir, fichiers, threads)
-    with open(qc_path) as f:
-        lignes = f.readlines()
-    nouvelles_lignes = [lignes[0]]
-    entete = lignes[0].rstrip("\n").split("\t")      # colonnes reperees par leur nom (qc.txt a gagne N50)
-    i_comp, i_cont = entete.index("Completeness(%)"), entete.index("Contamination(%)")
-    for ligne in lignes[1:]:
-        cols = ligne.rstrip("\n").split("\t")
-        cols[i_comp], cols[i_cont] = qualite.get(cols[0], ("NA", "NA"))
-        nouvelles_lignes.append("\t".join(cols) + "\n")
-    with open(qc_path, "w") as f:
-        f.writelines(nouvelles_lignes)
-    print("    -> qc.txt updated with Completeness and Contamination")
-
-
-def etape_proteines(fichiers, proteins_dir):
-    announce(3)
-    os.makedirs(proteins_dir, exist_ok=True)
-    for chemin in fichiers:
-        nom = os.path.splitext(os.path.basename(chemin))[0]
-        run(["prodigal", "-i", chemin, "-a", proteins_dir + "/" + nom + ".faa", "-o", os.devnull, "-q"])
-    print("    -> proteins written to %s" % proteins_dir)
-
-
-def etape_ani(fichiers, results_dir, threads):
-    announce(4)
-    liste = results_dir + "/liste.txt"
-    with open(liste, "w") as f:
-        for g in fichiers:
-            f.write(g + "\n")
-    run(["fastANI", "--ql", liste, "--rl", liste,
-         "-o", results_dir + "/ani_resultats.txt", "-t", str(threads)])
-    print("    -> ani_resultats.txt created")
-
-
-def etape_dddh(genomes_dir, results_dir, threads):
-    announce(5)
-    run(["python", SCRIPTS + "/dddh.py", genomes_dir, results_dir + "/dddh_out", str(threads)])
-    print("    -> dddh_out/dddh_distance.tsv and dddh_similarite.tsv created")
-
-
-def etape_aai(fichiers, results_dir, threads):
-    announce(6)
-    aai_db = results_dir + "/aai_db"
-    os.makedirs(aai_db, exist_ok=True)
-    for chemin in fichiers:
-        nom = os.path.splitext(os.path.basename(chemin))[0]
-        run(["EzAAI", "extract", "-i", chemin, "-o", aai_db + "/" + nom + ".db", "-l", nom])
-    run(["EzAAI", "calculate", "-i", aai_db, "-j", aai_db,
-         "-o", results_dir + "/aai_resultats.tsv", "-t", str(threads)])
-    print("    -> aai_resultats.tsv created")
-
-
-def etape_pocp(proteins_dir, results_dir, threads):
-    announce(7)
-    run(["python", SCRIPTS + "/pocp.py", proteins_dir, results_dir + "/pocp_out", str(threads)])
-    print("    -> pocp_out/pocp_matrice.tsv created")
-
-
-def nom_easycgtree(nom):
-    """EasyCGTree renomme ses fichiers d'entree avant de les lire (sub rename de EasyCGTree.pl) : espaces et '_'
-    deviennent '-', et ce nom-la sert d'etiquette dans l'arbre. Les autres caracteres permis (NOM_PERMIS) restent."""
-    return re.sub(r"[\s_]", "-", nom)
-
-
-def etape_arbre(fichiers, results_dir, job_id, threads, outgroup=None):
-    announce(8)
-    noms = [os.path.splitext(os.path.basename(f))[0] for f in fichiers]
-    vrai_nom = {}
-    for nom in noms:
-        autre = vrai_nom.setdefault(nom_easycgtree(nom), nom)
-        if autre != nom:
-            fail("EasyCGTree turns '_' into '-', so '%s' and '%s' would get the same name in the tree: "
-                 "rename one of them" % (autre, nom))
-    if not os.path.exists(EASYCG + "/EasyCGTree.pl"):
-        fail("EasyCGTree4 not found at %s - it must be installed manually "
-             "(not available via conda), see the README's Installation section" % EASYCG)
-    input_name = "job_" + job_id
-    entree = EASYCG + "/" + input_name
-    os.makedirs(entree, exist_ok=True)
-    for g in fichiers:
-        shutil.copy(g, entree)
-    run(["perl", "EasyCGTree.pl", "-input", input_name,
-         "-hmm", "bac120", "-tree", "sm", "-tree_app", "fasttree",
-         "-thread", str(threads)], cwd=EASYCG)
-    arbre = EASYCG + "/" + input_name + ".bac120.120.supermatrix.fasttree.tree"
-    if not os.path.exists(arbre):
-        fail("tree file not found (%s) - EasyCGTree may have failed" % arbre)
-    # les feuilles reprennent les noms des genomes (ceux des matrices), pas ceux qu'EasyCGTree leur a donnes
-    with open(arbre) as fh:
-        newick = fh.read()
-    feuilles = re.findall(r"(?<=[(,])([^(),:;]+)(?=[:),;])", newick)
-    inconnues = sorted(set(feuilles) - set(vrai_nom))
-    if inconnues:
-        fail("unexpected leaf names in EasyCGTree's tree: %s" % ", ".join(inconnues))
-    newick = re.sub(r"(?<=[(,])([^(),:;]+)(?=[:),;])", lambda m: vrai_nom[m.group(1)], newick)
-    # FastTree ecrit un arbre non enracine : on le garde tel quel, et arbre.tree
-    # (lu par les figures et l'interface) est sa version enracinee, au point
-    # median ou sur le groupe externe donne avec --outgroup.
-    brut = results_dir + "/arbre_non_enracine.tree"
-    with open(brut, "w") as fh:
-        fh.write(newick)
-    cleanup_easycgtree(input_name)
-    cmd = ["python", SCRIPTS + "/root_tree.py", brut, results_dir + "/arbre.tree"]
-    if outgroup:
-        cmd += ["--outgroup", outgroup]
-    run(cmd)
-    print("    -> arbre.tree (rooted) and arbre_non_enracine.tree copied to results")
-
-
-def cleanup_easycgtree(input_name):
-    """Remove this job's working files from the shared EasyCGTree tool directory."""
-    for path in glob.glob(EASYCG + "/" + input_name + "*"):
-        if os.path.isdir(path):
-            shutil.rmtree(path, ignore_errors=True)
-        else:
-            try:
-                os.remove(path)
-            except OSError:
-                pass
 
 
 # Commandes qui affichent la version de chaque outil, par etape (une ligne suffit, voir ecrire_versions)
 VERSIONS = [
     ("python", None, [sys.executable, "--version"]),
+    ("Snakemake", None, [sys.executable, "-m", "snakemake", "--version"]),
     ("CheckM2", "checkm2", ["conda", "run", "-n", "checkm2env", "checkm2", "--version"]),
     ("Prodigal", "proteines", ["prodigal", "-v"]),
     ("FastANI", "ani", ["fastANI", "--version"]),
@@ -487,10 +319,61 @@ def ecrire_synthese(results_dir):
     print("    -> synthese_paires.tsv: %d pairs, every measure and the species / genus calls" % len(lignes))
 
 
-def etape_figures(results_dir):
-    announce(9)
-    run(["Rscript", SCRIPTS + "/plot_all_web.R", results_dir])
-    print("    -> PNG figures created in %s" % results_dir)
+def etapes_prevues(selection, noms, proteins_dir):
+    """Etapes qui vont tourner : celles demandees, plus celles dont elles ont besoin et qui n'ont pas encore leurs
+    fichiers. C'est Snakemake qui les ajoute (voir workflow/Snakefile) ; les connaitre ici permet de les annoncer
+    des le depart (ligne STEPS) et de les viser, pour que chacune annonce aussi sa fin."""
+    prevues = set(selection)
+    if "checkm2" in prevues:
+        prevues.add("qc")                    # qc.txt est reecrit avec les valeurs de CheckM2
+    if "pocp" in prevues and not all(os.path.exists("%s/%s.faa" % (proteins_dir, n)) for n in noms):
+        prevues.add("proteines")
+    return [k for k in STEPS_KEYS if k in prevues]
+
+
+def commande_snakemake(prevues, selection, output_dir, configfile, threads):
+    """Snakemake vise les etapes prevues et relance celles qui ont ete demandees ; les autres ne tournent que si
+    leurs fichiers manquent. Seule la date des fichiers decide si un resultat est perime (--rerun-triggers mtime),
+    pas une modification du Snakefile ou de l'environnement : un resultat garde reste celui du run d'avant."""
+    return ([sys.executable, "-m", "snakemake"] + prevues +
+            ["--snakefile", SNAKEFILE, "--directory", output_dir, "--configfile", configfile,
+             "--cores", str(threads), "--forcerun"] + [r for k in selection for r in REGLES[k]] +
+            ["--rerun-triggers", "mtime", "--rerun-incomplete", "--nolock", "--sdm", "conda",
+             "--quiet", "rules", "host", "progress"])
+
+
+def lancer_snakemake(cmd, prevues):
+    """Lance Snakemake en recopiant sa sortie (sauf les lignes sans interet, BRUIT) et arrete le pipeline s'il
+    echoue, en nommant les etapes qui etaient en cours si aucune n'a deja dit pourquoi elle echouait."""
+    commencees, finies, explique, annule = set(), set(), False, []
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+
+    # Annulation (SIGTERM, envoye par l'interface a tout le groupe de processus) : on la transmet a Snakemake et on
+    # continue de lire sa sortie jusqu'a ce qu'il ait arrete ses taches. Sans lecteur, Snakemake resterait bloque.
+    def arreter(signum, frame):
+        annule.append(signum)
+        proc.terminate()
+    signal.signal(signal.SIGTERM, arreter)
+
+    for ligne in proc.stdout:
+        if ligne.startswith(BRUIT):
+            continue
+        print(ligne, end="")
+        sys.stdout.flush()
+        mots = ligne.split()
+        if mots[:1] == ["PROGRESS"] and len(mots) >= 3:
+            (commencees if mots[1] == "start" else finies).add(mots[2])
+        elif ligne.startswith("STEP FAILED"):
+            explique = True
+    proc.wait()
+    if annule:
+        print("===== PIPELINE CANCELLED =====")
+        sys.exit(1)
+    if proc.returncode != 0:
+        if explique:
+            sys.exit(1)
+        en_cours = [STEPS[STEPS_KEYS.index(k)] for k in prevues if k in commencees and k not in finies]
+        fail("%s failed, see the log above" % (" / ".join(en_cours) if en_cours else "Snakemake"))
 
 
 def main():
@@ -507,50 +390,32 @@ def main():
                               "(default: midpoint rooting)")
     args = parser.parse_args()
 
-    selection = etapes_demandees(args.steps)
-    # dans l'ordre d'execution, pour que la progression suive les etapes lancees
-    SELECTION[:] = [k for k in STEPS_KEYS if k in selection]
+    selection = [k for k in STEPS_KEYS if k in etapes_demandees(args.steps)]
 
     job_id = args.job_id or uuid.uuid4().hex[:12]
-    genomes_dir = os.path.abspath(args.genomes_dir)
-    proteins_dir = os.path.abspath(args.output_dir) + "/proteins"
-    results_dir = os.path.abspath(args.output_dir) + "/results"
+    output_dir = os.path.abspath(args.output_dir)
+    proteins_dir = output_dir + "/proteins"
+    results_dir = output_dir + "/results"
 
     print("===== PIPELINE START (job %s) =====" % job_id)
     print("Steps selected: %s" % ", ".join(selection))
 
-    genomes = lister_genomes(genomes_dir, selection)   # toujours necessaire, rapide
-    genomes_dir, fichiers = preparer_dossiers(genomes, os.path.abspath(args.output_dir), results_dir, proteins_dir)
+    genomes = lister_genomes(os.path.abspath(args.genomes_dir), selection)   # toujours necessaire, rapide
+    genomes_dir, _ = preparer_dossiers(genomes, output_dir, results_dir, proteins_dir)
     ecrire_versions(results_dir, selection, args)
 
-    if "qc" in selection:
-        etape_qc(genomes, results_dir)
-    if "checkm2" in selection:
-        if not os.path.exists(results_dir + "/qc.txt"):
-            print("    !! WARNING: qc.txt not found in %s" % results_dir)
-            print("    !! The 'qc' step must be run at least once before 'checkm2'.")
-            print("    !! Re-run with --steps qc,checkm2")
-        else:
-            etape_checkm2(results_dir, fichiers, args.threads)
-    if "proteines" in selection:
-        etape_proteines(fichiers, proteins_dir)
-    if "ani" in selection:
-        etape_ani(fichiers, results_dir, args.threads)
-    if "dddh" in selection:
-        etape_dddh(genomes_dir, results_dir, args.threads)
-    if "aai" in selection:
-        etape_aai(fichiers, results_dir, args.threads)
-    if "pocp" in selection:
-        if not os.path.isdir(proteins_dir) or not glob.glob(proteins_dir + "/*.faa"):
-            print("    !! WARNING: no protein files found in %s" % proteins_dir)
-            print("    !! The 'proteines' step must be run at least once before POCP.")
-            print("    !! Re-run with --steps proteines,pocp")
-        else:
-            etape_pocp(proteins_dir, results_dir, args.threads)
-    if "arbre" in selection:
-        etape_arbre(fichiers, results_dir, job_id, args.threads, args.outgroup)
-    if "figures" in selection:
-        etape_figures(results_dir)
+    prevues = etapes_prevues(selection, list(genomes), proteins_dir)
+    ajoutees = [k for k in prevues if k not in selection]
+    if ajoutees:
+        print("    (also running %s, needed by the selected steps)" % ", ".join(ajoutees))
+    print("STEPS %s" % ",".join(prevues))
+    sys.stdout.flush()
+    # la configuration du Snakefile, gardee avec les resultats : snakemake peut etre relance a la main avec elle
+    configfile = results_dir + "/snakemake_config.json"
+    with open(configfile, "w") as fh:
+        json.dump({"genomes": genomes_dir, "results": results_dir, "proteins": proteins_dir, "steps": prevues,
+                   "job_id": job_id, "outgroup": args.outgroup}, fh, indent=2)
+    lancer_snakemake(commande_snakemake(prevues, selection, output_dir, configfile, args.threads), prevues)
 
     ecrire_synthese(results_dir)
     print("===== PIPELINE DONE =====")

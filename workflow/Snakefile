@@ -1,0 +1,156 @@
+# Snakefile - The 9 steps of the TGA pipeline as a Snakemake workflow.
+#
+# Not meant to be run by hand: scripts/pipeline_web.py checks the genomes, prepares the folders, writes the config
+# file (results/snakemake_config.json) and then calls Snakemake on the steps that were asked for, which it forces
+# to run again (--forcerun). A step that one of them needs and whose files are missing is run too: POCP runs
+# Prodigal first if proteins are missing, and qc.txt is rewritten after CheckM2 to take its values. Files from a
+# previous run of the same genomes are reused otherwise (pipeline_web.py archives them when the genomes change).
+#
+# Each step prints "PROGRESS start <step>" and "PROGRESS done <step>" (with its label), which pipeline_web.py and
+# the web interface read to follow the run. The heavy steps take every core, so they run one at a time; the
+# per-genome jobs (Prodigal, EzAAI extract) run side by side.
+#
+# Config keys: genomes (folder of <name>.fna files), results, proteins, steps (list), job_id, outgroup (or null).
+import os
+import sys
+
+sys.path.insert(0, os.path.join(workflow.basedir, "..", "scripts"))
+from pipeline_web import STEPS, STEPS_KEYS  # noqa: E402
+
+SCRIPTS = os.path.normpath(os.path.join(workflow.basedir, "..", "scripts"))
+PYTHON = sys.executable
+G = config["genomes"]
+R = config["results"]
+P = config["proteins"]
+SELECTION = config["steps"]
+GENOMES = glob_wildcards(G + "/{g}.fna").g
+LABEL = dict(zip(STEPS_KEYS, STEPS))
+
+
+def start(step):
+    return "echo 'PROGRESS start %s %s'; " % (step, LABEL[step])
+
+
+def done(step):
+    return "; echo 'PROGRESS done %s %s'" % (step, LABEL[step])
+
+
+def genomes():
+    return expand(G + "/{g}.fna", g=GENOMES)
+
+
+# the order of the steps in the interface, when several could run
+def priority(step):
+    return len(STEPS_KEYS) - STEPS_KEYS.index(step)
+
+
+rule qc:
+    input:
+        genomes(),
+        # only when CheckM2 runs, so qc.txt is written after it, with its values
+        [R + "/checkm2_out_fna/quality_report.tsv"] if "checkm2" in SELECTION else [],
+    output: R + "/qc.txt"
+    priority: priority("qc")
+    shell: start("qc") + "{PYTHON} {SCRIPTS}/qc.py {G} {R}" + done("qc")
+
+
+rule checkm2:
+    input: genomes()
+    output: R + "/checkm2_out_fna/quality_report.tsv"
+    params: out=R + "/checkm2_out_fna"
+    threads: workflow.cores
+    priority: priority("checkm2")
+    # CheckM2 has its own environment (TensorFlow/Python conflict with the main one), see the README
+    conda: "checkm2env"
+    shell:
+        start("checkm2") +
+        "checkm2 predict --input {G} --output-directory {params.out} -x fna --threads {threads} --force" +
+        done("checkm2")
+
+
+rule prodigal:
+    input: G + "/{g}.fna"
+    output: P + "/{g}.faa"
+    priority: priority("proteines")
+    shell: start("proteines") + "prodigal -i {input} -a {output} -o /dev/null -q"
+
+
+rule proteines:
+    input: expand(P + "/{g}.faa", g=GENOMES)
+    shell: "echo 'PROGRESS done proteines %s'" % LABEL["proteines"]
+
+
+rule ani:
+    input: genomes()
+    output: R + "/ani_resultats.txt"
+    params: liste=R + "/liste.txt"
+    threads: workflow.cores
+    priority: priority("ani")
+    shell:
+        start("ani") +
+        "printf '%s\\n' {input} > {params.liste}; "
+        "fastANI --ql {params.liste} --rl {params.liste} -o {output} -t {threads}" +
+        done("ani")
+
+
+rule dddh:
+    input: genomes()
+    output: R + "/dddh_out/dddh_distance.tsv", R + "/dddh_out/dddh_similarite.tsv"
+    threads: workflow.cores
+    priority: priority("dddh")
+    shell: start("dddh") + "{PYTHON} {SCRIPTS}/dddh.py {G} {R}/dddh_out {threads}" + done("dddh")
+
+
+rule ezaai_extract:
+    input: G + "/{g}.fna"
+    output: R + "/aai_db/{g}.db"
+    priority: priority("aai")
+    # each job gets its own temporary folder: by default EzAAI uses /tmp/ezaai for all of them
+    shell:
+        start("aai") +
+        "tmp=$(mktemp -d); EzAAI extract -i {input} -o {output} -l {wildcards.g} -tmp $tmp; rm -rf $tmp"
+
+
+rule aai:
+    input: expand(R + "/aai_db/{g}.db", g=GENOMES)
+    output: R + "/aai_resultats.tsv"
+    params: db=R + "/aai_db"
+    threads: workflow.cores
+    priority: priority("aai")
+    shell:
+        start("aai") +
+        "EzAAI calculate -i {params.db} -j {params.db} -o {output} -t {threads}" +
+        done("aai")
+
+
+rule pocp:
+    input: expand(P + "/{g}.faa", g=GENOMES)
+    output: R + "/pocp_out/pocp_matrice.tsv"
+    threads: workflow.cores
+    priority: priority("pocp")
+    shell: start("pocp") + "{PYTHON} {SCRIPTS}/pocp.py {P} {R}/pocp_out {threads}" + done("pocp")
+
+
+rule arbre:
+    input: genomes()
+    output: R + "/arbre.tree", R + "/arbre_non_enracine.tree"
+    params:
+        job_id=config["job_id"],
+        outgroup="--outgroup '%s'" % config["outgroup"] if config.get("outgroup") else "",
+    threads: workflow.cores
+    priority: priority("arbre")
+    shell:
+        start("arbre") +
+        "{PYTHON} {SCRIPTS}/arbre.py {G} {R} {params.job_id} {threads} {params.outgroup}" +
+        done("arbre")
+
+
+# The figures are drawn from every result present, so they declare no output and always run when asked for;
+# their input is only the results of the steps of this run, so that they wait for them.
+DRAWN = {"ani": rules.ani.output, "dddh": rules.dddh.output, "aai": rules.aai.output,
+         "pocp": rules.pocp.output, "arbre": rules.arbre.output}
+
+rule figures:
+    input: [DRAWN[s] for s in SELECTION if s in DRAWN]
+    priority: priority("figures")
+    shell: start("figures") + "Rscript {SCRIPTS}/plot_all_web.R {R}" + done("figures")

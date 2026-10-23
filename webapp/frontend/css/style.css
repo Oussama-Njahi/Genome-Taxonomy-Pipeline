@@ -303,14 +303,14 @@ input[type="checkbox"]:checked::after { opacity: 1; }
 .press-pct { font-family: var(--f-display); font-variation-settings: "opsz" 12; font-weight: 600; font-size: 38px;
   line-height: 1; font-variant-numeric: lining-nums tabular-nums; color: var(--prussian); }
 /* the bar is an engraved rule: one division per step (--steps), finished steps inked in Prussian blue (--p is
-   their share), and the step in the press hatched in carmine, its hatching moving while the run is alive */
-.press-track { --steps: 9; --p: 0; position: relative; height: 22px; margin: 20px 4px 26px; padding: 3px;
+   their share), and the steps in the press (--r of them) hatched in carmine, the hatching moving while the run is alive */
+.press-track { --steps: 9; --p: 0; --r: 1; position: relative; height: 22px; margin: 20px 4px 26px; padding: 3px;
   background: var(--plate); border: 1px solid var(--ink);
   box-shadow: 0 0 0 3px var(--plate), 0 0 0 4px var(--rule); }
 .press-fill { height: 100%; width: 0; background: var(--prussian); transition: width 0.6s ease; }
 .press-track::before {
   content: ""; position: absolute; top: 3px; bottom: 3px; display: none;
-  left: calc(3px + (100% - 6px) * var(--p)); width: calc((100% - 6px) / var(--steps));
+  left: calc(3px + (100% - 6px) * var(--p)); width: calc((100% - 6px) * var(--r) / var(--steps));
   background: repeating-linear-gradient(135deg, var(--carmine) 0 4px, transparent 4px 9px);
   animation: press-hatch 0.9s linear infinite; transition: left 0.6s ease;
 }
