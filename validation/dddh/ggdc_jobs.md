@@ -16,3 +16,18 @@ threshold. Each job takes one query genome and its reference genomes; the files 
 
 For every result, write the **formula 2** dDDH (in %) in `ggdc_reference.tsv` on the line of that pair, then run
 `validate_dddh.py` again.
+
+## Submitted jobs
+
+Formula 2 values parsed from the result e-mails are in `ggdc_results/ggdc_formula2.tsv`.
+
+| Job | GGDC job ID | Submitted | Results received |
+|---|---|---|---|
+| 1 | 26-11-07-15-02-063404484 | 2026-11-07 15:02 CET | yes, 4 pairs |
+| 2 | 26-11-07-15-06-023405755 | 2026-11-07 15:06 CET | yes, 1 pair |
+| 3 | 26-11-07-15-07-343379628 | 2026-11-07 15:07 CET | yes, 3 pairs |
+| 4 | 26-11-07-15-08-563404484 | 2026-11-07 15:08 CET | yes, 3 pairs |
+| 5 | 26-11-07-15-10-133379628 | 2026-11-07 15:10 CET | yes, 1 pair |
+| 6 | 26-11-07-15-15-013405755 | 2026-11-07 15:15 CET | yes, 3 pairs |
+| 7 | 26-11-07-15-16-343404484 | 2026-11-07 15:16 CET | yes, 2 pairs; *B. licheniformis* was submitted instead of *B. subtilis* NCIB3610 |
+| 8 | 26-11-07-15-17-483405755 | 2026-11-07 15:17 CET | yes, 2 pairs |
