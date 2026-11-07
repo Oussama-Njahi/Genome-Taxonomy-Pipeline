@@ -34,6 +34,18 @@ def cleanup_easycgtree(input_name):
                 pass
 
 
+def fichier_arbre(input_name):
+    """L'arbre d'EasyCGTree, <input>.bac120.<n>.supermatrix.fasttree.tree : n est le nombre de genes gardes dans la
+    supermatrice, 120 seulement si chaque gene est present dans assez de genomes (-gene_cutoff 0.8, soit 4 genomes
+    sur 5). Il en garde moins quand des genomes n'ont pas tous les genes (118 avec deux Klebsiella qui en ont 118).
+    Renvoie (chemin, n), ou (None, None) s'il n'y a pas d'arbre."""
+    for chemin in glob.glob(pw.EASYCG + "/" + glob.escape(input_name) + ".bac120.*.supermatrix.fasttree.tree"):
+        n = chemin[len(pw.EASYCG + "/" + input_name + ".bac120."):].split(".")[0]
+        if n.isdigit():
+            return chemin, int(n)
+    return None, None
+
+
 def construire_arbre(fichiers, results_dir, job_id, threads, outgroup=None):
     noms = [os.path.splitext(os.path.basename(f))[0] for f in fichiers]
     vrai_nom = {}
@@ -53,9 +65,11 @@ def construire_arbre(fichiers, results_dir, job_id, threads, outgroup=None):
     pw.run(["perl", "EasyCGTree.pl", "-input", input_name,
             "-hmm", "bac120", "-tree", "sm", "-tree_app", "fasttree",
             "-thread", str(threads)], cwd=pw.EASYCG)
-    arbre = pw.EASYCG + "/" + input_name + ".bac120.120.supermatrix.fasttree.tree"
-    if not os.path.exists(arbre):
-        pw.fail("tree file not found (%s) - EasyCGTree may have failed" % arbre)
+    arbre, n_genes = fichier_arbre(input_name)
+    if arbre is None:
+        pw.fail("tree file not found (%s/%s.bac120.<genes>.supermatrix.fasttree.tree) - EasyCGTree may have failed"
+                % (pw.EASYCG, input_name))
+    print("    (tree built on %d of the 120 bac120 marker genes)" % n_genes)
     # les feuilles reprennent les noms des genomes (ceux des matrices), pas ceux qu'EasyCGTree leur a donnes
     with open(arbre) as fh:
         newick = fh.read()

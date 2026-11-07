@@ -90,6 +90,22 @@ def test_noms_easycgtree():
     assert arbre.nom_easycgtree("Bacillus-subtilis-168") == "Bacillus-subtilis-168"
 
 
+def test_fichier_arbre():
+    """Le nom de l'arbre d'EasyCGTree porte le nombre de genes gardes, pas toujours 120."""
+    ancien = pw.EASYCG
+    with tempfile.TemporaryDirectory() as d:
+        pw.EASYCG = d
+        try:
+            assert arbre.fichier_arbre("job_x") == (None, None)
+            ecrire(d, "job_x.bac120.sm.fasttree_2026-10-30.log", "journal, pas un arbre")
+            ecrire(d, "job_x.bac120.118.supermatrix.fasttree.tree", "(A:1,B:1,C:1);")
+            ecrire(d, "job_y.bac120.120.supermatrix.fasttree.tree", "(A:1,B:1,C:1);")   # un autre job
+            chemin, n = arbre.fichier_arbre("job_x")
+            assert n == 118 and chemin.endswith("job_x.bac120.118.supermatrix.fasttree.tree")
+        finally:
+            pw.EASYCG = ancien
+
+
 def test_qc_et_checkm2():
     with tempfile.TemporaryDirectory() as d:
         genomes, res = os.path.join(d, "g"), os.path.join(d, "results")
