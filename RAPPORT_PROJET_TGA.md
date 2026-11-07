@@ -4,7 +4,8 @@
 
 Stage de recherche · Institut des Régions Arides (IRA), Médenine, Tunisie · Laboratoire de Recherche « Écologie Pastorale »
 Auteur : Oussama Njahi · Dépôt : https://github.com/Oussama-Njahi/Genome-Taxonomy-Pipeline
-État du document : 14 octobre 2026, version `main` = `b5205b0` (37 commits), plus la validation non encore commitée (§ 10.2).
+État du document : 7 novembre 2026, à partir de `main` = `76fcd0f` (54 commits), plus la validation GGDC (§ 10.2) et
+la correction du nombre de gènes de l'arbre (§ 6.3), commitées avec cette version du rapport.
 
 ---
 
@@ -35,7 +36,8 @@ calcule tous les critères génomiques utilisés pour délimiter les espèces et
 - **qualité des génomes** : taille, %GC, contigs ; complétude et contamination avec CheckM2 ;
 - **délimitation d'espèce** : ANI (FastANI) et dDDH (implémentation de la formule 2 du GBDP) ;
 - **délimitation de genre** : AAI (EzAAI) et POCP (implémentation sur DIAMOND) ;
-- **phylogénomique** : arbre sur 120 gènes marqueurs bactériens (bac120, EasyCGTree + FastTree), enraciné ;
+- **phylogénomique** : arbre sur les gènes marqueurs bactériens bac120 (jusqu'à 120 ; EasyCGTree + FastTree),
+  enraciné ;
 - **figures** : heatmaps et arbre, à 300 dpi.
 
 Le pipeline s'utilise en ligne de commande ou par une interface web locale. Dans l'interface, on dépose les génomes, on
@@ -45,7 +47,8 @@ Ce qui distingue l'outil : tout tourne **en local et hors ligne**, les quatre cr
 et chaque étape est optionnelle.
 
 Sur le jeu de validation, les verdicts d'espèce du dDDH concordent avec ceux de l'ANI pour **37 paires sur 37**
-(corrélation de rang −0,986).
+(corrélation de rang −0,986), et avec ceux de **GGDC**, l'implémentation de référence, pour **19 paires sur 19**
+(corrélation de rang −0,996), dont 9 des 10 paires les plus proches du seuil.
 
 ---
 
@@ -76,8 +79,11 @@ utilisable par un biologiste sans ligne de commande, qui produise des résultats
 | **29 sept. – 2 oct.** | Logigramme du pipeline (`tga-pipeline-flowchart.png`). Refonte visuelle de l'interface. Fiabilité : les figures et onglets des étapes non lancées sont ignorés au lieu de faire échouer le run ; une paire dDDH sans alignement est notée NA, jamais « identique » ; `pipeline.py` lance exactement le même pipeline que l'interface ; ajout de la dépendance `r-reshape2`. |
 | **5 – 6 oct.** | Documentation de la méthode dDDH implémentée (Auch 2010 contre le GGDC actuel). Progression numérotée parmi les étapes choisies. Refonte de l'interface et des figures R en « planche d'atlas ancien ». Test complet sur 5 génomes NCBI. **Logo TGA**. Colonne « Proteins » dans le registre. Jobs terminés retrouvés après un redémarrage du serveur. |
 | **11 oct.** | **Corrections scientifiques** : arbre enraciné ; dDDH avec BLASTN classique ; POCP avec DIAMOND ultra-sensible ; fraction alignée de l'ANI. Interface : vocabulaire « step », nouvelle barre de progression. |
-| **11 – 14 oct.** | **Validation** : dDDH sur 37 paires de génomes de référence ; POCP DIAMOND contre BLASTP. *(non commitée)* |
-| **22 oct.** | **Snakemake** : les neuf étapes deviennent un workflow (`workflow/Snakefile`). Dépendances entre étapes gérées par Snakemake, tâches par génome en parallèle, CheckM2 dans son environnement conda par la directive `conda:`. |
+| **11 – 15 oct.** | **Validation** : dDDH sur 37 paires de génomes de référence ; POCP DIAMOND contre BLASTP. Estimation dDDH bornée entre 0 et 100 %. Premier rapport de projet. |
+| **16 oct.** | **Fiabilité et traçabilité** : vérification des génomes en entrée, runs séparés (`previous_runs/`), tous les cœurs par défaut ; N50, synthèse par paire (`synthese_paires.tsv`) et `versions.txt` ; feuilles de l'arbre renommées comme les génomes ; environnement conda figé ; `CITATION.cff` ; tests unitaires relancés à chaque push (GitHub Actions). |
+| **22 – 23 oct.** | **Snakemake** : les neuf étapes deviennent un workflow (`workflow/Snakefile`). Dépendances entre étapes gérées par Snakemake, tâches par génome en parallèle, CheckM2 dans son environnement conda par la directive `conda:`. Fusion dans `main` le 23 oct. (Pull Request #1), CI verte. |
+| **30 oct.** | **Arbre** : le nombre de gènes gardés par EasyCGTree n'est plus supposé égal à 120 (§ 6.3). |
+| **7 nov.** | **Validation GGDC** : 19 paires soumises au service GGDC 3.0 ; décisions d'espèce identiques pour les 19 (§ 10.2). |
 
 ---
 
@@ -123,15 +129,15 @@ utilisable par un biologiste sans ligne de commande, qui produise des résultats
 | Python | 3.14.7 | orchestration, QC, dDDH, POCP, enracinement |
 | Snakemake | 9.27.0 | exécution des étapes (workflow) |
 | FastANI | 1.34 | ANI |
-| BLAST+ (`blastn`) | via bioconda | alignements du dDDH |
+| BLAST+ (`blastn`) | 2.17.0 | alignements du dDDH |
 | DIAMOND | 2.2.8 | alignements du POCP |
 | Prodigal | 2.6.3 | prédiction des protéines |
 | EzAAI | 1.2.4 | AAI |
 | CheckM2 | 1.1.0 (env. `checkm2env`) | complétude et contamination |
-| EasyCGTree | 4.2 | extraction et alignement des 120 gènes bac120 |
+| EasyCGTree | 4.2 | extraction et alignement des gènes marqueurs bac120 (120 au plus) |
 | FastTree | 2.2.0 | arbre de maximum de vraisemblance |
 | R | 4.5.3 (ggplot2, ggtree, ape, reshape2) | figures |
-| FastAPI + uvicorn | via conda-forge | serveur web |
+| FastAPI + uvicorn | 0.141.1 + 0.54.0 | serveur web |
 
 Machine de développement : Ubuntu sous WSL2, 12 cœurs, 11 Go de RAM.
 
@@ -168,7 +174,7 @@ disponibles (`--threads`).
 | 5 | **dDDH** | `dddh.py` : BLASTN `-task blastn`, e-value ≤ 1e-2, formule 2, trimming (§ 6.1) | `dddh_out/dddh_distance.tsv`, `dddh_similarite.tsv` |
 | 6 | **AAI** | EzAAI `extract` puis `calculate` | `aai_resultats.tsv` |
 | 7 | **POCP** | `pocp.py` : DIAMOND `blastp --ultra-sensitive` (§ 6.2) | `pocp_out/pocp_matrice.tsv` |
-| 8 | **Arbre phylogénomique** | EasyCGTree `-hmm bac120 -tree sm -tree_app fasttree`, puis `root_tree.py` (§ 6.3) | `arbre.tree` (enraciné), `arbre_non_enracine.tree` |
+| 8 | **Arbre phylogénomique** | `arbre.py` : EasyCGTree `-hmm bac120 -tree sm -tree_app fasttree`, puis `root_tree.py` (§ 6.3) | `arbre.tree` (enraciné), `arbre_non_enracine.tree` |
 | 9 | **Figures** | `plot_all_web.R` | `heatmap_ani.png`, `heatmap_dddh.png`, `heatmap_aai.png`, `heatmap_pocp.png`, `tree.png` |
 | — | **À chaque run** | synthèse et traçabilité | `synthese_paires.tsv` (une ligne par paire : ANI et fraction alignée, dDDH, AAI, POCP, verdicts espèce et genre), `versions.txt` (date, commande, commit, version de chaque outil) |
 
@@ -222,8 +228,10 @@ ce qui est biologiquement faux. Avec blastn, il est à 0,30 contre 0,23–0,27.
 **Limites connues.**
 - **Approximation du trimming** : on suppose une identité uniforme le long de chaque HSP tronquée.
 - **Conversion différente de GGDC** : le service GGDC actuel (Meier-Kolthoff et al. 2013) convertit la distance avec
-  un modèle logistique non publié. Les pourcentages ne sont donc pas comparables ; seules les décisions et le
-  classement le sont. C'est pourquoi les figures montrent la distance.
+  un modèle linéaire généralisé (GLM) dont les coefficients ne sont pas publiés. Les pourcentages ne sont donc pas
+  comparables ; seules les décisions et le classement le sont. C'est pourquoi les figures montrent la distance.
+- **Distances un peu plus grandes que celles de GGDC** : environ +9 % en médiane sur 18 paires (§ 10.2). GGDC
+  utilise d'autres réglages d'alignement (BLAST+ avec des mots de 38 nt, algorithme « coverage »).
 - **Paire sans alignement** : elle est notée NA, jamais « identique ».
 
 ### 6.2 POCP (`scripts/pocp.py`)
@@ -243,7 +251,16 @@ POCP > 50 % sont du même genre.
 
 Le mode ultra-sensible reproduit BLASTP à 0,1 point près, environ deux fois plus vite.
 
-### 6.3 Enracinement de l'arbre (`scripts/root_tree.py`)
+### 6.3 Arbre : gènes gardés et enracinement (`scripts/arbre.py`, `scripts/root_tree.py`)
+
+**Nombre de gènes.** EasyCGTree écarte un gène bac120 s'il est présent dans moins de 80 % des génomes (option
+`-gene_cutoff`, 0,8 par défaut), et nomme l'arbre d'après le nombre de gènes gardés :
+`<job>.bac120.<n>.supermatrix.fasttree.tree`. Le pipeline cherchait seulement `n = 120` et échouait donc quand des
+génomes n'avaient pas tous les gènes (118 avec deux *Klebsiella*). Depuis le 30 octobre, `arbre.py` lit `n` dans le nom
+du fichier et l'écrit dans le journal (« tree built on 118 of the 120 bac120 marker genes »). Un test
+(`test_fichier_arbre`) vérifie ce cas.
+
+**Enracinement.**
 
 FastTree écrit un arbre **non enraciné**. Lire le premier nœud du fichier comme une racine faisait apparaître un
 groupe externe comme frère d'un génome étudié : *S. aureus* sortait frère de *B. licheniformis*.
@@ -391,7 +408,7 @@ Voir § 6.2 : l'écart est de 0,1 point avec BLASTP en mode ultra-sensible.
   - *Bacillus cereus* et apparentés : *B. cereus*, *B. anthracis*, « *B. thuringiensis* » 97-27, *B. mycoides* ;
   - *Klebsiella* : *K. pneumoniae*, *K. variicola*, *K. quasipneumoniae*, *K. oxytoca*.
 - **Procédure** : `validate_dddh.py` télécharge les génomes, lance `dddh.py` tel quel et FastANI, puis compare les
-  décisions. La durée est de 18 minutes.
+  décisions. La durée est de 18 minutes. Les résultats sont dans `RESULTS.md` et `pairs.tsv`.
 
 **Accord avec l'ANI (≥ 95 %)** : **37 / 37 (100 %)**. La corrélation de rang entre la distance dDDH et l'ANI est de −0,986.
 
@@ -406,9 +423,57 @@ Les cas difficiles sont bien traités :
 - les paires d'espèces différentes juste sous le seuil ANI sont bien séparées : *K. pneumoniae* / *K. variicola*
   (ANI 94,8 %, d = 0,058) et *B. velezensis* / *B. amyloliquefaciens* (ANI 93,9 %, d = 0,063).
 
-**À compléter** : la comparaison avec **GGDC**, l'implémentation de référence. Le plan prévoit 8 soumissions couvrant
-19 paires, dont les 10 plus proches du seuil (`ggdc_jobs.md`). Il faut reporter les valeurs dans
-`ggdc_reference.tsv`, puis relancer le script.
+#### Comparaison avec GGDC
+
+**Procédure.** Le 7 novembre 2026, 8 jobs ont été soumis au service GGDC 3.0 (https://ggdc.dsmz.de, programme
+`GBDP2_BLASTPLUS`) avec les fichiers FASTA du jeu de référence (`ggdc_jobs.md`, avec les identifiants des jobs). Les
+résultats sont arrivés par e-mail en moins de 20 minutes. La valeur retenue est le dDDH de la **formule 2**, celle que
+GGDC recommande. Les valeurs extraites des e-mails sont dans `ggdc_results/ggdc_formula2.tsv` (distance, dDDH,
+intervalle de confiance, probabilité que le DDH dépasse 70 %), et reportées dans `ggdc_reference.tsv` ;
+`validate_dddh.py` compare ensuite les décisions (GGDC : même espèce si dDDH ≥ 70 %).
+
+- **Paires comparées** : 19 sur les 37. Elles couvrent les 4 groupes, les 5 paires de même espèce selon l'ANI et
+  9 des 10 paires les plus proches du seuil (distance entre 0,0206 et 0,0824). La dixième, *B. spizizenii* /
+  *B. subtilis* NCIB 3610, n'a pas été soumise : le job 7 a reçu *B. licheniformis* à sa place. Elle a la même
+  distance (0,0738) que *B. spizizenii* / *B. subtilis* 168, qui est comparée.
+
+**Accord avec GGDC (formule 2, ≥ 70 %)** : **19 / 19 (100 %)**. La corrélation de rang entre la distance dDDH du
+pipeline et le dDDH de GGDC est de −0,996.
+
+| | GGDC : même espèce | GGDC : espèces différentes |
+|---|---|---|
+| **dDDH : même espèce** | 5 | 0 |
+| **dDDH : espèces différentes** | 0 | 14 |
+
+**Paires proches du seuil** (seuil du pipeline : d ≤ 0,0412 ; seuil GGDC : dDDH ≥ 70 %) :
+
+| Paire | d pipeline | d GGDC | dDDH GGDC | P(DDH ≥ 70 %) | Décision |
+|---|---|---|---|---|---|
+| *E. coli* K-12 / *S. flexneri* 2a | 0,0219 | 0,0178 | 84,8 % | 93,7 % | même espèce |
+| *E. coli* K-12 / *E. coli* O157:H7 | 0,0242 | 0,0199 | 82,9 % | 92,6 % | même espèce |
+| *B. anthracis* / « *B. thuringiensis* » 97-27 | 0,0255 | 0,0221 | 81,1 % | 91,4 % | même espèce |
+| *E. coli* O157:H7 / *S. flexneri* 2a | 0,0308 | 0,0239 | 79,6 % | 90,2 % | même espèce |
+| *K. pneumoniae* / *K. variicola* | 0,0584 | 0,0546 | 58,3 % | 46,7 % | espèces différentes |
+| *B. amyloliquefaciens* / *B. velezensis* | 0,0634 | 0,0586 | 56,2 % | 39,0 % | espèces différentes |
+| *K. pneumoniae* / *K. quasipneumoniae* | 0,0675 | 0,0632 | 53,9 % | 31,1 % | espèces différentes |
+| *K. quasipneumoniae* / *K. variicola* | 0,0701 | 0,0659 | 52,6 % | 26,8 % | espèces différentes |
+| *B. spizizenii* / *B. subtilis* 168 | 0,0738 | 0,0699 | 50,8 % | 21,3 % | espèces différentes |
+
+Ce que montre la comparaison :
+- **Mêmes décisions et même classement.** Les deux méthodes ordonnent les 19 paires presque de la même façon
+  (corrélation de Pearson entre les deux distances : 0,997).
+- **Les distances du pipeline sont un peu plus grandes** : de 6 à 29 % selon la paire, 9 % en médiane (18 paires ; la
+  paire *B. subtilis* 168 / NCIB 3610, à d = 0,0001 des deux côtés, est exclue du rapport). Près du seuil, l'écart est
+  de +0,003 à +0,007. La cause probable est la différence de réglages d'alignement (§ 6.1).
+- **Le cas le plus serré est *K. pneumoniae* / *K. variicola*** : GGDC lui donne 46,7 % de chances d'être une même
+  espèce, et un dDDH de 58,3 %, sous les 70 %. Les deux méthodes le classent en espèces différentes.
+- **Les pourcentages diffèrent, comme prévu** (§ 6.1). Près du seuil, la droite du pipeline donne 76,9 à 80,8 % pour
+  les paires de même espèce (GGDC : 79,6 à 84,8 %) et 58,0 à 64,8 % pour les paires d'espèces différentes (GGDC :
+  50,8 à 58,3 %). Loin du seuil, elle tombe à 0 % pour les *Bacillus* d'espèces éloignées, là où GGDC donne 19 à 21 %.
+
+**Portée.** L'accord est complet sur ce jeu, mais aucune paire n'a de distance comprise entre 0,031 et 0,058 dans le
+pipeline. Avec des distances supérieures d'environ 9 % à celles de GGDC, une paire très proche du seuil pourrait être
+classée « espèces différentes » par le pipeline et « même espèce » par GGDC (§ 13).
 
 ---
 
@@ -446,6 +511,7 @@ cd webapp/backend && uvicorn app:app --host 127.0.0.1 --port 8000
 ```bash
 python tests/test_root_tree.py
 python tests/test_pipeline_inputs.py
+python tests/test_workflow.py            # à blanc (snakemake -n) : les tâches lancées selon les étapes choisies
 python validation/dddh/validate_dddh.py
 python validation/pocp/compare_engines.py A.faa B.faa
 ```
@@ -459,18 +525,22 @@ demande environ 6 Go de RAM.
 
 ```
 .
+├── workflow/
+│   └── Snakefile            # les 9 étapes en règles Snakemake
 ├── scripts/
 │   ├── pipeline.py          # point d'entrée en ligne de commande
-│   ├── pipeline_web.py      # les 9 étapes (aussi utilisé par l'interface)
+│   ├── pipeline_web.py      # vérifications, dossiers, lancement de Snakemake, synthèse (aussi utilisé par l'interface)
+│   ├── qc.py                # contrôle qualité (qc.txt), avec les valeurs de CheckM2
 │   ├── dddh.py              # dDDH, formule 2 du GBDP
 │   ├── pocp.py              # POCP sur DIAMOND
+│   ├── arbre.py             # arbre phylogénomique (EasyCGTree, noms des feuilles)
 │   ├── root_tree.py         # enracinement de l'arbre
 │   └── plot_all_web.R       # figures
 ├── webapp/
 │   ├── backend/             # app.py (API), job_manager.py (file d'attente)
 │   └── frontend/            # index.html, css/, js/ (app.js, plates.js), fonts/, icons/, img/, vendor/ (GSAP)
 ├── tests/                 # tests unitaires, relancés à chaque push (GitHub Actions)
-├── validation/              # dddh/ (jeu de référence, rapport), pocp/ (comparaison des moteurs)
+├── validation/              # dddh/ (jeu de référence, résultats, valeurs GGDC), pocp/ (comparaison des moteurs)
 ├── branding/tga/            # kit du logo
 ├── stage_environment.yml   # environnement conda, versions figées
 ├── CITATION.cff
@@ -486,9 +556,13 @@ validation sont générés localement et exclus de git.
 ## 13. Limites connues et travaux restants
 
 ### Scientifique
-- **Validation GGDC** : à faire (§ 10.2).
+- **Écart avec GGDC près du seuil** : les décisions concordent pour les 19 paires comparées, mais les distances du
+  pipeline sont supérieures d'environ 9 % à celles de GGDC (§ 10.2). Une paire dont la distance GGDC est juste sous le
+  seuil pourrait passer au-dessus de 0,0412 dans le pipeline. Pour une description d'espèce, il faut soumettre à GGDC
+  les paires proches du seuil.
 - **Zone 95–97 % d'ANI** : non représentée dans le jeu de validation. Les distances y passent de 0,031 à 0,058 de part
-  et d'autre du seuil de 0,0412. Il faut ajouter des paires dans cette zone pour vérifier le calibrage du seuil.
+  et d'autre du seuil de 0,0412. Il faut ajouter des paires dans cette zone, et les soumettre aussi à GGDC, pour
+  vérifier le calibrage du seuil et mesurer l'effet de l'écart ci-dessus.
 - **Pourcentage dDDH linéaire** : il est maintenant borné entre 0 et 100 %, mais il reste une estimation peu fiable
   loin du seuil. Pour publier, il vaut mieux donner la distance `d`.
 - **POCP** : la comparaison avec BLASTP porte sur 2 paires, aucune proche du seuil de 50 %.
@@ -506,8 +580,8 @@ validation sont générés localement et exclus de git.
   mais pas pour un déploiement public.
 - **Vérification des génomes** : elle contrôle le format, pas la qualité biologique. Un génome très fragmenté ou
   contaminé passe ; il est seulement signalé dans le registre (CheckM2).
-- **Tests** : 13 tests unitaires relancés à chaque push, mais aucun test automatique ne fait tourner les outils
-  bioinformatiques ; ce rôle revient à la validation (§ 10).
+- **Tests** : 19 tests unitaires relancés à chaque push (dont 4 qui vérifient à blanc les tâches de Snakemake), mais
+  aucun test automatique ne fait tourner les outils bioinformatiques ; ce rôle revient à la validation (§ 10).
 - **Nom** : le dépôt s'appelle encore « Genome-Taxonomy-Pipeline » ; l'interface et l'API disent « TGA — Taxo Genomics
   Analyses ».
 
@@ -531,6 +605,9 @@ validation sont générés localement et exclus de git.
   high-scoring segment pairs. *Standards in Genomic Sciences* 2:142–148.
 - Meier-Kolthoff JP, Auch AF, Klenk HP, Göker M (2013). Genome sequence-based species delimitation with confidence
   intervals and improved distance functions. *BMC Bioinformatics* 14:60.
+- Meier-Kolthoff JP, Sardà Carbasse J, Peinado-Olarte RL, Göker M (2022). TYGS and LPSN: a database tandem for fast
+  and reliable genome-based classification and nomenclature of prokaryotes. *Nucleic Acids Research* 50:D801–D807
+  (publication à citer pour GGDC 3.0).
 - Jain C et al. (2018). High throughput ANI analysis of 90K prokaryotic genomes reveals clear species boundaries.
   *Nature Communications* (FastANI).
 - Qin QL et al. (2014). A proposed genus boundary for the prokaryotes based on genomic insights. *Journal of

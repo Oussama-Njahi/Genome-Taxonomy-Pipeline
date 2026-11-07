@@ -40,6 +40,16 @@ The nine steps are a **[Snakemake](https://snakemake.readthedocs.io)** workflow 
 
 On a 14-genome test set (*Bhargavaea*, *Candidatus Kurthia*, *Caryophanon*, plus four outgroups), the four independent analyses consistently show that ***Bacillus ndiopicus*** is genomically closer to *Caryophanon* (AAI ≈ 69%, POCP ≈ 50–54%) than to *Bacillus subtilis* (AAI ≈ 60%, POCP ≈ 38%) — suggesting a taxonomic misclassification, confirmed independently by ANI, AAI, POCP, and the phylogenomic tree topology.
 
+These values were obtained before the corrections of 11 October 2026 (dDDH, POCP, tree rooting); the data set has to be rerun with the current version before they are published.
+
+## Validation
+
+- **dDDH against ANI:** on 37 pairs of complete RefSeq genomes chosen around the species threshold (*Bacillus*, *Escherichia*/*Shigella*, *B. cereus* group, *Klebsiella*), the dDDH and ANI (≥ 95%) species decisions agree for **37 of 37 pairs** (Spearman correlation −0.986).
+- **dDDH against GGDC:** 19 of these pairs, including 9 of the 10 nearest the threshold, were submitted to [GGDC 3.0](https://ggdc.dsmz.de) (formula 2). The species decisions agree for **19 of 19 pairs** (Spearman correlation −0.996). The pipeline's distances are about 9% larger than GGDC's (median over 18 pairs), so pairs very close to the threshold should still be checked on GGDC.
+- **POCP:** DIAMOND `--ultra-sensitive` reproduces BLASTP within 0.1 point.
+
+Details, data and scripts are in [`validation/`](validation/) (see `validation/dddh/README.md` and `RESULTS.md`).
+
 ## Notes on the methods
 
 - **ANI and aligned fraction.** FastANI reports how many fragments of the query genome it could align. The interface shows this aligned fraction under each ANI value, and both the interface and the ANI figure mark a "same species" ANI (≥ 95%) measured on less than 50% of the genome, which is too little to conclude on its own.
